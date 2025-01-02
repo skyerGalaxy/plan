@@ -1,0 +1,21 @@
+/* CSS for PlanSwiper.vue */
+.swiper {
+  width: 100%;
+  padding-top: 50px; 
+  padding-bottom: 50px;
+}
+  
+.swiper-slide {
+  background-position: center;
+  background-size: cover;
+  width: 400px;
+  height: 650px;
+  border-radius: 15px; /* Add rounded corners */
+  box-shadow: 0 0 20px 5px rgba(173, 216, 230, 0.5); /* Add gradient glow effect from light blue to white */
+}
+
+.swiper-slide img {
+  display: block;
+  width: 100%;
+}
+  
