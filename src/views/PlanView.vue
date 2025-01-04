@@ -1,51 +1,43 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
-import { WeekPicker, SeasonPicker, MonthPicker, DayPicker } from '@/components/DatePicker/dataPicker';
+import { ref, watch } from 'vue';
+import { SeasonPicker} from '@/components/DatePicker/dataPicker';
 import PlanSwiper from '@/components/PlanSwiper/PlanSwiper.vue';
 import HideSwitch from '@/components/HideSwitch.vue';
-import { weekInMonth } from '@/utils/weekInMonth';
-import { daysInMonth } from '@/utils/daysInMonth';
-import { currentWeek } from '@/utils/currentWeek';
+import { usePlanerStore } from '@/stores/planStore';
+
+const planStore = usePlanerStore();
+const cycleValue = ref<number>(4);
+
+const swiperCount = ref(planStore.daysOfWeek);
+const activeIndex = ref(planStore.daysInWeek-1);
 
 
-const cycle = ref<number>(4);
-const swiperCount = ref<number>(10);
-const activeIndex = ref(0);
 
-const currentComponents = computed(() => {
-  switch (cycle.value) {
+watch(cycleValue, (newVal) => {
+  //根据不同的cycleValue值，根据planStore中的相应日期请求相应的数据
+  //根据planStore中的数据，计算swiperCount的值
+  switch (newVal) {
     case 1:
-      return SeasonPicker;
+      swiperCount.value = 4;
+      activeIndex.value = 0;
+      break;
     case 2:
-      return MonthPicker;
+      swiperCount.value = 3;
+      activeIndex.value = 0;
+      break;
     case 3:
-      return WeekPicker;
+      swiperCount.value = planStore.weeksOfMonth;
+      activeIndex.value = planStore.weekInMonth-1;
+      break;
     case 4:
-      return DayPicker;
-    default:
-      return DayPicker;
+      swiperCount.value = planStore.daysOfWeek;
+      activeIndex.value = planStore.daysInWeek-1;
+      break;
   }
 });
 
-watch(cycle, (newVal) => {
-  switch (newVal) {
-    case 1:
-      swiperCount.value=4;
-      activeIndex.value=3;
-      break;
-    case 2:
-      swiperCount.value=3;
-      activeIndex.value =3;
-      break;
-    case 3:
-      swiperCount.value=weekInMonth();
-      activeIndex.value = currentWeek().weekNumber-1;
-      break;
-    case 4:
-      swiperCount.value=daysInMonth();
-      activeIndex.value = currentWeek().dayNumber-1;
-      break;
-  }
+planStore.$subscribe((mutation,state) => {
+  console.log(mutation,state);
 });
 
 </script>
@@ -54,10 +46,10 @@ watch(cycle, (newVal) => {
   <a-layout style="height: 90vh; display: flex; flex-direction: column;">
     <a-layout-header style="background: #fff; display: flex; justify-content: space-between; align-items: center;">
       <div style="text-align: center; flex: 1;">
-        <component :is="currentComponents"></component>
+        <SeasonPicker v-show="cycleValue == 1" style="width: 200px;"/>
       </div>
       <div style="text-align: right;">
-        <a-radio-group v-model:value="cycle" button-style="solid">
+        <a-radio-group v-model:value="cycleValue" button-style="solid">
           <a-radio-button :value="1">季</a-radio-button>
           <a-radio-button :value="2">月</a-radio-button>
           <a-radio-button :value="3">周</a-radio-button>

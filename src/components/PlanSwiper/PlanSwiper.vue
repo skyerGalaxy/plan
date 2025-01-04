@@ -24,15 +24,18 @@ const props = defineProps({
     default:0
   }
 });
+//mark slide when swiper change
+const activeSlideIndex = ref(props.initIndex);
+
 
 //control rebuild swiper
 const swiperKey = ref(`${props.slideCount}-${props.initIndex}`);
 watch([() => props.slideCount, () => props.initIndex], () => {
   swiperKey.value = `${props.slideCount}-${props.initIndex}`;
+  activeSlideIndex.value = props.initIndex;
 });
 
-//mark slide when swiper change
-const activeSlideIndex = ref(props.initIndex);
+
 const onSlideChange = (swiper: any) => {
   activeSlideIndex.value = swiper.activeIndex;
 };                     

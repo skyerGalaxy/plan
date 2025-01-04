@@ -9,6 +9,7 @@ import router from './router'
 
 
 import { register } from 'swiper/element/bundle';
+import { getCurrentDate } from './utils/getCurrentDate';
 register()
 
 const app = createApp(App)
@@ -17,5 +18,6 @@ const pinia = createPinia()
 app.use(pinia)
 app.use(router)
 
+getCurrentDate()
 
 app.use(Antd).mount('#app');
