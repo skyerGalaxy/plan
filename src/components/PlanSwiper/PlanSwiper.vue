@@ -10,41 +10,62 @@ import './style.css';
 // import required modules
 import { EffectCoverflow, Pagination } from 'swiper/modules';
 import ListView from './ListView.vue';
-
 import {watch, ref } from 'vue';
-
+import { usePlanerStore } from '@/stores/planStore';
 const modules = [EffectCoverflow, Pagination];
-const props = defineProps({
-  slideCount: {
-    type: Number,
-    required:true,
-  },
-  initIndex:{
-    type:Number,
-    default:0
+
+const planStore = usePlanerStore();
+const slideCount = ref(planStore.slideCount);
+const activeIndex = ref(planStore.dayViewIndex-1);
+
+const key = ref("${planStore.cycleValue}-${planStore.year}");
+
+
+planStore.$subscribe((mutation, state) => {
+  slideCount.value = planStore.getSlideCount();
+  switch (state.cycleValue) {
+    case 1:
+      activeIndex.value = state.quarter - 1;
+      break;
+    case 2:
+      activeIndex.value = state.month-(planStore.quarter-1)*3 - 1;
+      break;
+    case 3:
+      activeIndex.value = state.weekViewIndex - 1;
+      break;
+    case 4:
+      activeIndex.value = state.dayViewIndex - 1;
+      break;
   }
-});
-//mark slide when swiper change
-const activeSlideIndex = ref(props.initIndex);
-
-
-//control rebuild swiper
-const swiperKey = ref(`${props.slideCount}-${props.initIndex}`);
-watch([() => props.slideCount, () => props.initIndex], () => {
-  swiperKey.value = `${props.slideCount}-${props.initIndex}`;
-  activeSlideIndex.value = props.initIndex;
+  key.value = `${state.cycleValue}-${state.year}`;
 });
 
+function onSlideChange(swiper: any) {
+  switch (planStore.cycleValue) {
+    case 1:
+      planStore.quarter = swiper.activeIndex + 1;
+      break;
+    case 2:
+      planStore.month = (planStore.quarter-1)*3+swiper.activeIndex + 1;
+      break;
+    case 3:
+      planStore.weekViewIndex = swiper.activeIndex + 1;
+      break;
+    case 4:
+      planStore.dayViewIndex = swiper.activeIndex + 1;
+      break;
+  }
+}
 
-const onSlideChange = (swiper: any) => {
-  activeSlideIndex.value = swiper.activeIndex;
-};                     
+
+
+                
 </script>
 
 <template>
     <swiper
-      :key="swiperKey"
-      :initialSlide="initIndex"
+      :key="key"
+      :initialSlide="activeIndex"
       :centeredSlides="true"
       :effect="'coverflow'"
       :grabCursor="true"
@@ -62,7 +83,7 @@ const onSlideChange = (swiper: any) => {
       style="flex: 1;"
       @slideChange="onSlideChange"
         >
-      <swiper-slide v-for="n in slideCount" :key="n" style="background-color: white; "  :class="{'disabled-area': activeSlideIndex !== n-1}" >
+      <swiper-slide v-for="n in slideCount" :key="n" style="background-color: white; "  :class="{'disabled-area': activeIndex !== n-1}" >
         <ListView />
       </swiper-slide>
     </swiper>

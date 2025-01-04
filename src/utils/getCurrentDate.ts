@@ -10,13 +10,17 @@ export const getCurrentDate = () => {
     const currentQuarter = dayjs().quarter();
     //.month() returns 0-11, so we add 1 to get 1-12
     const currentMonth = dayjs().month()+1;
-    //get the month index in the current quarter
-    const weeksOfMonth = Math.ceil(dayjs().daysInMonth() / 7);
+
+
+    // //get the month index in the current quarter
+    // const weeksOfMonth = Math.ceil(dayjs().daysInMonth() / 7);
+
+
     //get the week index in the current month
     const weekInMonth = Math.ceil(dayjs().date() / 7);
-    //get the days in the current week
+    //Open the app to display the number of days, the default is in the day view
     const daysOfWeek = getDaysOfWeek(weekInMonth);
-    //get the day index in the current week
+    //Initial slideIndex
     const daysInWeek = dayjs().date()%7;
 
     const planStore = usePlanerStore();
@@ -24,18 +28,15 @@ export const getCurrentDate = () => {
         year: currentYear,
         quarter: currentQuarter,
         month: currentMonth,
-        weeksOfMonth: weeksOfMonth,
-        weekInMonth: weekInMonth,
-        daysOfWeek: daysOfWeek,
-        daysInWeek: daysInWeek
+        slideCount: daysOfWeek,
+        weekViewIndex: weekInMonth,
+        dayViewIndex: daysInWeek,
     });
 
     return {
         year: currentYear,
         quarter: currentQuarter,
         month: currentMonth,
-        weeksOfMonth: weeksOfMonth,
-        weekInMonth: weekInMonth,
         daysOfWeek: daysOfWeek,
         daysInWeek: daysInWeek
     };

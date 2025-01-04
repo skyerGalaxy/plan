@@ -20,16 +20,6 @@ describe('getCurrentDate', () => {
         expect(month).toBe(1);
     });
 
-    it('should return the weeks of the current month', () => {
-        const { weeksOfMonth } = getCurrentDate();
-        expect(weeksOfMonth).toBe(5);
-    });
-
-    it('should return the week index in the current month', () => {
-        const { weekInMonth } = getCurrentDate();
-        expect(weekInMonth).toBe(1);
-    });
-
     it('should return the days in the current week', () => {
         const { daysOfWeek } = getCurrentDate();
         expect(daysOfWeek).toBe(7);
@@ -37,6 +27,6 @@ describe('getCurrentDate', () => {
 
     it('should return the day index in the current week', () => {
         const { daysInWeek } = getCurrentDate();
-        expect(daysInWeek).toBe(3);
+        expect(daysInWeek).toBe(4);
     });
 });

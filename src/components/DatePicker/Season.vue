@@ -1,21 +1,21 @@
 <template>
-      <a-date-picker v-model:value="year" picker="year" />
+      <a-date-picker v-model:value="year" picker="year" @change ="onDateChange"/>
 </template>
 <script lang="ts" setup>
-import { watch } from 'vue';
 import { ref } from 'vue';
 import { usePlanerStore } from '@/stores/planStore';
+import dayjs from 'dayjs';
 
 const year = ref<number>();
 const planStore = usePlanerStore();
-watch(year, (newVal) => {
-      if (newVal !== undefined) {
-            planStore.year = newVal;
-      }
 
-      //request new data from season table according to the year
-      //write the data to planStore
-});
+function onDateChange(date: dayjs.Dayjs) {
+      planStore.year = date.year();
+      planStore.quarter = 1;
+      planStore.month = 1;
+      planStore.weekViewIndex = 1;
+      planStore.dayViewIndex = 1;
+}
 </script>
 
   
