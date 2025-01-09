@@ -8,11 +8,12 @@
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
     "test:unit": "vitest",
-     "test": "vitest",
+    "test": "vitest",
     "build-only": "vite build",
     "type-check": "vue-tsc --build"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.47.12",
     "ant-design-vue": "4.x",
     "dayjs": "^1.11.13",
     "pinia": "^2.3.0",
