@@ -3,6 +3,7 @@ import { SeasonPicker} from '@/components/DatePicker/dataPicker';
 import PlanSwiper from '@/components/PlanSwiper/PlanSwiper.vue';
 import HideSwitch from '@/components/HideSwitch.vue';
 import { usePlanerStore } from '@/stores/planStore';
+import CurrentDate from '@/components/CurrentDate.vue';
 
 const planStore = usePlanerStore();
 </script>
@@ -29,5 +30,8 @@ const planStore = usePlanerStore();
       </div>
       <PlanSwiper style="flex: 1; overflow-y: auto;"/>
     </a-layout-content>
+    <a-layout-footer style="text-align: center; background: #fff;">
+      <CurrentDate/>
+    </a-layout-footer>
   </a-layout>
 </template>

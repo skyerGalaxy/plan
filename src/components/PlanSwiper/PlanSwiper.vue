@@ -44,12 +44,18 @@ function onSlideChange(swiper: any) {
   switch (planStore.cycleValue) {
     case 1:
       planStore.quarter = swiper.activeIndex + 1;
+      planStore.month = (swiper.activeIndex)*3 + 1;
+      planStore.weekViewIndex = 1;
+      planStore.dayViewIndex = 1;
       break;
     case 2:
       planStore.month = (planStore.quarter-1)*3+swiper.activeIndex + 1;
+      planStore.weekViewIndex = 1;
+      planStore.dayViewIndex = 1;
       break;
     case 3:
       planStore.weekViewIndex = swiper.activeIndex + 1;
+      planStore.dayViewIndex = 1;
       break;
     case 4:
       planStore.dayViewIndex = swiper.activeIndex + 1;

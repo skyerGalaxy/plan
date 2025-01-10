@@ -1,12 +1,11 @@
 <template>
-      <a-date-picker v-model:value="year" picker="year" @change ="onDateChange"/>
+      <a-date-picker  picker="year" @change ="onDateChange"/>
 </template>
 <script lang="ts" setup>
-import { ref } from 'vue';
 import { usePlanerStore } from '@/stores/planStore';
 import dayjs from 'dayjs';
 
-const year = ref<number>();
+// const year = ref<number>();
 const planStore = usePlanerStore();
 
 function onDateChange(date: dayjs.Dayjs) {
@@ -18,4 +17,5 @@ function onDateChange(date: dayjs.Dayjs) {
 }
 </script>
 
+  
   
