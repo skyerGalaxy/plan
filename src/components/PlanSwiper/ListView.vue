@@ -1,28 +1,11 @@
-
-<template>
-  <div class="header">
-    <div class="date">12/26   周五</div>
-    <div>
-      <img :src="addLightImage" alt="Add Plan" style="width: 20px; height: 20px;" />
-    </div>
-  </div>
-  <hr style="margin: 10px;border-color:azure;"/>
-  <div class="list-container">
-    <div v-for="(item, index) in data" :key="index" class="list-item">
-      <div>
-        <input type="checkbox" class="circle-checkbox"  />
-      </div>
-      <div class="content-column">
-        <div class="title">{{ item.title }}</div>
-        <div class="description">Description for {{ item.title }}</div>
-      </div>
-    </div>
-  </div>
-</template>
-
-
 <script lang="ts" setup>
-import addLightImage from '@/assets/add_light.svg';
+import AddPlanButton from '@/components/PlanSwiper/AddPlanButton.vue';
+
+defineProps({
+  slideDate:String 
+})
+
+
 interface DataItem {
   title: string;
 }
@@ -77,6 +60,31 @@ const data: DataItem[] = [
   },
 ];
 </script>
+
+
+<template>
+  <div class="header">
+    <div class="date">{{ slideDate }}</div>
+    <div>
+      <AddPlanButton />
+    </div>
+  </div>
+  <hr style="margin: 10px;border-color:azure;"/>
+  <div class="list-container">
+    <div v-for="(item, index) in data" :key="index" class="list-item">
+      <div>
+        <input type="checkbox" class="circle-checkbox"  />
+      </div>
+      <div class="content-column">
+        <div class="title">{{ item.title }}</div>
+        <div class="description">Description for {{ item.title }}</div>
+      </div>
+    </div>
+  </div>
+</template>
+
+
+
 
 <style scoped>
   .header {
