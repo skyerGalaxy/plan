@@ -1,5 +1,6 @@
 <script lang="ts" setup>
-import { ref } from 'vue';
+import { ref,defineProps} from 'vue';
+import dayjs from 'dayjs';
 
 import addLightImage from '@/assets/add_light.svg';
 import WhiteTomatoIcon from "@/assets/white_clock.svg";
@@ -9,16 +10,27 @@ import RangeButton from './RangeButton.vue';
 
 import { usePlanerStore } from '@/stores/planStore';
 
+defineProps({
+  slideDate:String 
+})
+
 
 
 const modalVisible = ref<boolean>(false);
 const planStore = usePlanerStore();
 const taskValue = ref<string>('');
+const rangeValue= ref<number>(1);
 const isLoop = ref<boolean>(false);
 const pomodoroCount = ref<number>(0);//current pomodoro count
 const hoverIndex = ref(0); // mouse hover index
 const whiteIcon = WhiteTomatoIcon;
 const coloredIcon = ColorTomatoIcon;
+
+//get rangeValue from RangeButton.vue(child component)
+function getRangeValue(value:number){
+  rangeValue.value = value;
+  console.log(rangeValue.value);
+}
 </script>
 
 <template>
@@ -34,7 +46,7 @@ const coloredIcon = ColorTomatoIcon;
     <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 40px;">
       <div style="display: flex; gap: 10px; margin-bottom: 10px;">
         <a-input v-model:value="taskValue" placeholder="把事情记下来" />
-        <RangeButton/>
+        <RangeButton @updateRangeValue="getRangeValue" />
       </div>
       <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
         <a-checkbox v-model:checked="isLoop">循环</a-checkbox>

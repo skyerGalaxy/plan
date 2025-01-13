@@ -1,6 +1,7 @@
 <script setup>
-import { ref } from 'vue';
+import { ref,defineEmits} from 'vue';
 import { computed } from 'vue';
+
 
 
 const isDropdownOpen = ref(false);
@@ -15,6 +16,7 @@ const priorities = [
 
 const buttonColor = ref('rgba(255, 230, 230, 0.5)');
 
+const emit = defineEmits(['updateRangeValue']);
 
 const toggleDropdown = () => {
     isDropdownOpen.value = !isDropdownOpen.value;
@@ -23,6 +25,7 @@ const toggleDropdown = () => {
 const selectPriority = (option) => {
     selectedPriority.value = option;
     selectedValue.value = option.value;
+    emit('updateRangeValue', option.value);
     isDropdownOpen.value = false;
     switch (option.value) {
       case 1:

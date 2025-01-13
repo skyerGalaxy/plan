@@ -66,7 +66,7 @@ const data: DataItem[] = [
   <div class="header">
     <div class="date">{{ slideDate }}</div>
     <div>
-      <AddPlanButton />
+      <AddPlanButton :slideDate="slideDate"/>
     </div>
   </div>
   <hr style="margin: 10px;border-color:azure;"/>
