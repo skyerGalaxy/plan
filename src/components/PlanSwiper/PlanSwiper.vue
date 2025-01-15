@@ -21,7 +21,7 @@ const activeIndex = ref(planStore.dayViewIndex-1);
 const quarterIndex = ref<number>(planStore.quarter - 1);
 const monthIndex = ref<number>(planStore.month-(planStore.quarter-1)*3 - 1);
 const weekIndex = ref<number>(planStore.weekViewIndex - 1);
-const dayIndex = ref<number>(planStore.dayViewIndex - 1);
+const dayIndex = ref<number>(0);
 
 const key = ref("${planStore.cycleValue}-${planStore.year}");
 

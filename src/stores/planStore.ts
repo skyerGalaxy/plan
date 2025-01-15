@@ -12,6 +12,10 @@ export const usePlanerStore = defineStore('planer',()=>{
     const weekViewIndex = ref<number>(0)
     const dayViewIndex = ref<number>(0)
 
+    //Add plan model view's store
+    const taskRangeInfo = ref<Object>({label: "重要且紧急", value: 1, class: "priority-urgent-important", symbol: "Ⅰ" })
+    const taskRangeIndex = ref<number>(1)//1,2,3,4
+
     function getSlideCount(): number {
         switch(cycleValue.value){
             case 1:
@@ -41,6 +45,8 @@ export const usePlanerStore = defineStore('planer',()=>{
         slideCount,
         weekViewIndex,
         dayViewIndex,
+        taskRangeInfo,
+        taskRangeIndex,
         getSlideCount
     }
 })

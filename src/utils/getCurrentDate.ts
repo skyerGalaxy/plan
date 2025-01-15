@@ -23,7 +23,7 @@ export const getCurrentDate = () => {
     //Open the app to display the number of days, the default is in the day view
     const daysOfWeek = getDaysOfWeek(weekInMonth);
     //Initial slideIndex
-    const daysInWeek = dayjs().date()%7;
+    const daysInWeek = dayjs().date()%7==0?7:dayjs().date()%7;
 
     const planStore = usePlanerStore();
     planStore.$patch({
