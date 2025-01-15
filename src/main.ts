@@ -4,7 +4,6 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import Antd from 'ant-design-vue';
 import 'ant-design-vue/dist/reset.css';
-import { SwipeCell } from 'vant';
 import App from './App.vue'
 import router from './router'
 
@@ -21,4 +20,4 @@ app.use(router)
 
 getCurrentDate()
 
-app.use(Antd).use(SwipeCell).mount('#app');
+app.use(Antd).mount('#app');
