@@ -99,8 +99,8 @@ function onSlideChange(swiper: any) {
 
 <template>
     <swiper
-      :key="key"
       :initialSlide="activeIndex"
+      :key = key
       :centeredSlides="true"
       :effect="'coverflow'"
       :grabCursor="true"

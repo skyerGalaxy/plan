@@ -5,37 +5,38 @@ import dayjs from 'dayjs';
 import addLightImage from '@/assets/add_light.svg';
 import WhiteTomatoIcon from "@/assets/white_clock.svg";
 import ColorTomatoIcon from "@/assets/red_clock.svg";
-
 import { DownOutlined } from '@ant-design/icons-vue';
-
-
 
 import RangeButton from './RangeButton.vue'; 
 
 import { usePlanerStore } from '@/stores/planStore';
 
+import {insertTaskToDay,insertTaskToQuarter,insertTaskToWeek,insertTaskToMonth} from '@/utils/supabaseFunction';
 
-
-defineProps({
-  slideDate:String 
+const props = defineProps({
+  slideDate: {
+    type: String,
+    default: ''
+  }
 })
 
 const planStore = usePlanerStore();
 
 const modalVisible = ref<boolean>(false);
 const taskValue = ref<string>('');
-const rangeValue= ref<number>(1);
 const isLoop = ref<boolean>(false);
 const pomodoroCount = ref<number>(0);//current pomodoro count
 const hoverIndex = ref(0); // mouse hover index
 const whiteIcon = WhiteTomatoIcon;
 const coloredIcon = ColorTomatoIcon;
 const parentTaskText = ref<string>('选择父任务');
+const parentTaskIndex = ref<number>(1);
 
 
-function handleMenuClick(e: { key: string; domEvent: Event }) {
+function handleMenuClick(e: { key: number; domEvent: Event }) {
   const text = (e.domEvent.target as HTMLElement).textContent;
   parentTaskText.value = text || '';
+  parentTaskIndex.value = e.key;
 }
 
 function modelCancel(){
@@ -48,10 +49,32 @@ function modelCancel(){
   parentTaskText.value = '选择父任务';
 }
 
-function modelOk(){
+async function modelOk(){
+  //check taskData whether is valid
   //submit the plan to supabase
-  // then reset the modal,
+  switch(planStore.cycleValue){
+    case 1:
+      await insertTaskToQuarter(taskValue.value,planStore.year,planStore.quarter,isLoop.value,planStore.taskRangeIndex);
+      break;
+    case 2:
+      await insertTaskToMonth(1,planStore.year,planStore.month,taskValue.value,isLoop.value,planStore.taskRangeIndex);
+      break;
+    case 3:
+      await insertTaskToWeek(1,planStore.year,planStore.month,planStore.weekViewIndex,taskValue.value,isLoop.value,planStore.taskRangeIndex)
+      break;
+    case 4:
+      await insertTaskToDay(parentTaskIndex.value,planStore.year,planStore.month,planStore.weekViewIndex,props.slideDate,taskValue.value,pomodoroCount.value,planStore.taskRangeIndex)
+  }
   // and insert the plan to the plan list
+
+  //reset the modal
+  modalVisible.value = false;
+  taskValue.value = '';
+  planStore.taskRangeIndex = 1;
+  planStore.taskRangeInfo = {label: "重要且紧急", value: 1, class: "priority-urgent-important", symbol: "Ⅰ" };
+  isLoop.value = false;
+  pomodoroCount.value = 0;
+  parentTaskText.value = '选择父任务';
 }
 </script>
 
@@ -64,7 +87,7 @@ function modelOk(){
       v-model:open="modalVisible"
       centered
       @cancel="modelCancel"
-      @ok="modalVisible = false"
+      @ok="modelOk"
     >
     <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 40px;">
       <div style="display: flex; gap: 10px; margin-bottom: 10px;">
