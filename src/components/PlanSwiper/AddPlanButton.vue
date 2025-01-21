@@ -31,6 +31,7 @@ const whiteIcon = WhiteTomatoIcon;
 const coloredIcon = ColorTomatoIcon;
 const parentTaskText = ref<string>('选择父任务');
 const parentTaskIndex = ref<number>(1);
+const confirmLoading = ref<boolean>(false);
 
 
 function handleMenuClick(e: { key: number; domEvent: Event }) {
@@ -54,16 +55,28 @@ async function modelOk(){
   //submit the plan to supabase
   switch(planStore.cycleValue){
     case 1:
-      await insertTaskToQuarter(taskValue.value,planStore.year,planStore.quarter,isLoop.value,planStore.taskRangeIndex);
+      confirmLoading.value = true;
+      await insertTaskToQuarter(taskValue.value,planStore.year,planStore.quarter,isLoop.value,planStore.taskRangeIndex).then(()=>{
+        confirmLoading.value = false;
+      });
       break;
     case 2:
-      await insertTaskToMonth(1,planStore.year,planStore.month,taskValue.value,isLoop.value,planStore.taskRangeIndex);
+      confirmLoading.value = true;
+      await insertTaskToMonth(1,planStore.year,planStore.month,planStore.quarter,taskValue.value,isLoop.value,planStore.taskRangeIndex).then(()=>{
+        confirmLoading.value = false;
+      });
       break;
     case 3:
-      await insertTaskToWeek(1,planStore.year,planStore.month,planStore.weekViewIndex,taskValue.value,isLoop.value,planStore.taskRangeIndex)
+      confirmLoading.value = true;
+      await insertTaskToWeek(1,planStore.year,planStore.month,planStore.weekViewIndex,taskValue.value,isLoop.value,planStore.taskRangeIndex).then(()=>{
+        confirmLoading.value = false;
+      });
       break;
     case 4:
-      await insertTaskToDay(parentTaskIndex.value,planStore.year,planStore.month,planStore.weekViewIndex,props.slideDate,taskValue.value,pomodoroCount.value,planStore.taskRangeIndex)
+      confirmLoading.value = true;
+      await insertTaskToDay(parentTaskIndex.value,planStore.year,planStore.month,planStore.weekViewIndex,props.slideDate,taskValue.value,pomodoroCount.value,planStore.taskRangeIndex).then(()=>{
+        confirmLoading.value = false;
+      });
   }
   // and insert the plan to the plan list
 
@@ -86,6 +99,7 @@ async function modelOk(){
     <a-modal
       v-model:open="modalVisible"
       centered
+      :confirm-loading="confirmLoading"
       @cancel="modelCancel"
       @ok="modelOk"
     >

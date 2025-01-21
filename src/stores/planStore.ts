@@ -9,8 +9,20 @@ export const usePlanerStore = defineStore('planer',()=>{
     const quarter = ref<number>(0)
     const month = ref<number>(0)
     const slideCount = ref<number>(0)
-    const weekViewIndex = ref<number>(0)
+    const weekViewIndex = ref<number>(0)//current week index in month,1,2,3,4,...
     const dayViewIndex = ref<number>(0)
+    
+    //active index for every cycle view
+    const quarterActiveIndex = ref<number>(0)
+    const monthActiveIndex = ref<number>(0)
+    const weekActiveIndex = ref<number>(0)
+    const dayActiveIndex = ref<number>(0)
+
+    //data for every cycle view
+    const quarterData = ref([])
+    const monthData = ref([])
+    const weekData = ref([])
+    const dayData = ref([])
 
     //Add plan model view's store
     const taskRangeInfo = ref<Object>({label: "重要且紧急", value: 1, class: "priority-urgent-important", symbol: "Ⅰ" })
@@ -37,6 +49,8 @@ export const usePlanerStore = defineStore('planer',()=>{
         }
     }
 
+
+
     return {
         cycleValue,
         year,
@@ -45,8 +59,16 @@ export const usePlanerStore = defineStore('planer',()=>{
         slideCount,
         weekViewIndex,
         dayViewIndex,
+        quarterActiveIndex,
+        monthActiveIndex,
+        weekActiveIndex,
+        dayActiveIndex,
         taskRangeInfo,
         taskRangeIndex,
+        quarterData,
+        monthData,
+        weekData,
+        dayData,
         getSlideCount
     }
 })

@@ -1,64 +1,12 @@
 <script lang="ts" setup>
 import AddPlanButton from '@/components/PlanSwiper/AddPlanButton.vue';
+import { usePlanerStore } from '@/stores/planStore';
+
+const planStore = usePlanerStore();
 
 defineProps({
-  slideDate:String 
+  slideDate:String ,
 })
-
-
-interface DataItem {
-  title: string;
-}
-const data: DataItem[] = [
-  {
-    title: 'Ant Design Title 1',
-  },
-  {
-    title: 'Ant Design Title 2',
-  },
-  {
-    title: 'Ant Design Title 3',
-  },
-  {
-    title: 'Ant Design Title 4',
-  },
-  {
-    title: 'Ant Design Title 1',
-  },
-  {
-    title: 'Ant Design Title 2',
-  },
-  {
-    title: 'Ant Design Title 3',
-  },
-  {
-    title: 'Ant Design Title 4',
-  },
-  {
-    title: 'Ant Design Title 1',
-  },
-  {
-    title: 'Ant Design Title 2',
-  },
-  {
-    title: 'Ant Design Title 3',
-  },
-  {
-    title: 'Ant Design Title 4',
-  },
-  {
-    title: 'Ant Design Title 1',
-  },
-  {
-    title: 'Ant Design Title 2',
-  },
-  {
-    title: 'Ant Design Title 3',
-  },
-  {
-    title: 'Ant Design Title 4',
-  },
-];
 </script>
 
 
@@ -71,14 +19,11 @@ const data: DataItem[] = [
   </div>
   <hr style="margin: 10px;border-color:azure;"/>
   <div class="list-container">
-    <div v-for="(item, index) in data" :key="index" class="list-item">
-      <div>
-        <input type="checkbox" class="circle-checkbox"  />
-      </div>
-      <div class="content-column">
-        <div class="title">{{ item.title }}</div>
-        <div class="description">Description for {{ item.title }}</div>
-      </div>
+    <div v-if="planStore.cycleValue == 1 || planStore.cycleValue == 2 || planStore.cycleValue == 3"  class="list-item">
+      quarterView style/monthView style/weekView style
+    </div>
+    <div v-else>
+      <div>dayView style</div>
     </div>
   </div>
 </template>

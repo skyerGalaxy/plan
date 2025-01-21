@@ -1,12 +1,13 @@
 import dayjs from 'dayjs';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 import { usePlanerStore } from '@/stores/planStore';
+import { getTaskFromDay } from './supabaseFunction';
 
 
 
 dayjs.extend(quarterOfYear);
 
-export const getCurrentDate = () => {
+export const getCurrentDate = async () => {
     //fetch the current date
     const currentYear = dayjs().year();
     const currentQuarter = dayjs().quarter();
@@ -25,6 +26,14 @@ export const getCurrentDate = () => {
     //Initial slideIndex
     const daysInWeek = dayjs().date()%7==0?7:dayjs().date()%7;
 
+    //initial active index for every cycle view
+    const quarterActiveIndex = currentQuarter-1;
+    const monthActiveIndex = currentMonth-(currentQuarter-1)*3-1;
+    const weekActiveIndex = weekInMonth-1;
+    const dayActiveIndex = daysInWeek-1;
+
+    const initialData = await getTaskFromDay(currentYear, currentMonth, weekInMonth);
+
     const planStore = usePlanerStore();
     planStore.$patch({
         year: currentYear,
@@ -33,6 +42,11 @@ export const getCurrentDate = () => {
         slideCount: daysOfWeek,
         weekViewIndex: weekInMonth,
         dayViewIndex: daysInWeek,
+        quarterActiveIndex: quarterActiveIndex,
+        monthActiveIndex: monthActiveIndex,
+        weekActiveIndex: weekActiveIndex,
+        dayActiveIndex: dayActiveIndex,
+        dayData: initialData
     });
 
     return {
