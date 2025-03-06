@@ -7,7 +7,7 @@ import './style.css';
 import { EffectCoverflow, Pagination } from 'swiper/modules';
 import dayjs from 'dayjs';
 import ListView from './ListView.vue';
-import { ref, watch, watchEffect } from 'vue';
+import { ref, watch,computed,} from 'vue';
 import { usePlanerStore } from '@/stores/planStore';
 const modules = [EffectCoverflow, Pagination];
 
@@ -19,14 +19,11 @@ const activeIndex = ref(planStore.dayActiveIndex);
 
 const key = ref(`${planStore.cycleValue}-${planStore.year}`);
 
-const taskData = ref<any[]>([]);
-watchEffect(() => {
-  taskData.value = planStore.dayData || [];
-});
-const quarterDate = ref<any[]>(planStore.quarterData);
-const monthDate = ref<any[]>(planStore.monthData);
-const weekDate = ref<any[]>(planStore.weekData);
-const dayDate = ref<any[]>(planStore.dayData);
+const taskData = ref<any[]>(planStore.dayData);
+const quarterData = ref<any[]>(planStore.quarterData);
+const monthData = ref<any[]>(planStore.monthData);
+const weekData = ref<any[]>(planStore.weekData);
+const dayData = ref<any[]>(planStore.dayData);
 
 const quarterChange = ref(false);
 const monthChange = ref(false);
@@ -39,49 +36,68 @@ const slideDateArray = ref<string[]>(Array.from({ length: slideCount.value }, (_
 
 const monthArray = ref<number[]>([1, 2, 3]);
 
+const isLoading = ref(false);
+
 watch(() => planStore.cycleValue, async (newValue, oldValue) => {
   if (newValue !== oldValue) {
+    isLoading.value = true;
     switch (planStore.cycleValue) {
       case 1:
         if (planStore.yearChange == false) {
-          taskData.value = quarterDate.value;
+          taskData.value = quarterData.value;
+          console.log("local",taskData.value)
         } else {
-          taskData.value = await getTaskFromQuarter(planStore.year);
+          const quarterResult = await getTaskFromQuarter(planStore.year);
+          taskData.value = quarterResult;
+          quarterData.value = quarterResult;
           planStore.yearChange = false;
+          console.log("supabase",taskData.value)
         }
         break;
       case 2:
         if (planStore.yearChange == false && quarterChange.value == false) {
-          taskData.value = monthDate.value;
+          taskData.value = monthData.value;
+          console.log("local",taskData.value)
         } else {
-          taskData.value = await getTaskFromMonth(planStore.year, planStore.quarter);
+          const monthResult = await getTaskFromMonth(planStore.year, planStore.quarter);
+          taskData.value = monthResult;
+          monthData.value = monthResult;
           planStore.yearChange = false;
           quarterChange.value = false;
+          console.log("supabase",taskData.value)
         }
         break;
       case 3:
         if (planStore.yearChange == false && quarterChange.value == false && monthChange.value == false) {
-          taskData.value = weekDate.value;
+          taskData.value = weekData.value;
+          console.log("local",taskData.value)
         } else {
-          taskData.value = await getTaskFromWeek(planStore.year, planStore.month);
+          const result = await getTaskFromWeek(planStore.year, planStore.month);
+          taskData.value = result;
+          weekData.value = result;
           planStore.yearChange = false;
           quarterChange.value = false;
           monthChange.value = false;
+          console.log("supabase",taskData.value)
         }
         break;
       case 4:
         if (planStore.yearChange == false && quarterChange.value == false && monthChange.value == false && weekChange.value == false) {
-          taskData.value = dayDate.value;
+          taskData.value = dayData.value;
+          console.log("local",taskData.value)
         } else {
-          taskData.value = await getTaskFromDay(planStore.year, planStore.month, planStore.weekViewIndex);
+          const result = await getTaskFromDay(planStore.year, planStore.month, planStore.weekViewIndex);
+          taskData.value = result;
+          dayData.value = result;
           planStore.yearChange = false;
           quarterChange.value = false;
           monthChange.value = false;
           weekChange.value = false;
+          console.log("supabase",taskData.value)
         }
         break;
     }
-    console.log(taskData.value);
+    isLoading.value = false
   }
 });
 
@@ -164,6 +180,20 @@ function onSlideChange(swiper: any) {
   }
 }
 
+const filteredTaskData = computed(() => (n:number,date: string) => {
+  switch (planStore.cycleValue) {
+    case 1:
+      return taskData.value.filter((item: any) => item.quarter === n);
+    case 2:
+      return taskData.value.filter((item: any) => item.month === monthArray.value[n-1]);
+    case 3:
+      return taskData.value.filter((item: any) => item.week === n)
+    case 4:
+      return taskData.value.filter((item: any) => dayjs(item.day).format('YYYY-MM-DD') === date);
+    default:
+      return [];
+  }
+});
 </script>
 
 <template>
@@ -190,8 +220,9 @@ function onSlideChange(swiper: any) {
   >
     <swiper-slide v-for="n in slideCount" :key="n" style="background-color: white;" :class="{'disabled-area': activeIndex !== n-1}">
       <ListView 
+        v-if="!isLoading"
         :slideDate="slideDateArray[n-1]" 
-        :taskData="taskData.filter((item: any) => dayjs(item.day).format('YYYY-MM-DD')===slideDateArray[n-1])"
+        :taskData="filteredTaskData(n,slideDateArray[n-1])"
       />
     </swiper-slide>
   </swiper>

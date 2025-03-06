@@ -18,6 +18,8 @@ const pinia = createPinia()
 app.use(pinia)
 app.use(router)
 
-getCurrentDate()
+await getCurrentDate().then((res)=>{
+  app.use(Antd).mount('#app');
+})
 
-app.use(Antd).mount('#app');
+

@@ -17,9 +17,9 @@ const props = defineProps<{
 
 const task = ref(props.taskData)
 
-onMounted(() => {
-  console.log("listview",props.taskData,props.slideDate);
-});
+// onMounted(() => {
+//   console.log("listview",props.taskData,props.slideDate,task.value);
+// });
 </script>
 
 
