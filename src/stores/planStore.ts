@@ -24,6 +24,9 @@ export const usePlanerStore = defineStore('planer',()=>{
     const weekData = ref([])
     const dayData = ref([])
 
+    // 年份是否发生变化的标志
+    const yearChange = ref<boolean>(false)
+
     //Add plan model view's store
     const taskRangeInfo = ref<Object>({label: "重要且紧急", value: 1, class: "priority-urgent-important", symbol: "Ⅰ" })
     const taskRangeIndex = ref<number>(1)//1,2,3,4
@@ -69,6 +72,7 @@ export const usePlanerStore = defineStore('planer',()=>{
         monthData,
         weekData,
         dayData,
-        getSlideCount
+        getSlideCount,
+        yearChange  
     }
 })

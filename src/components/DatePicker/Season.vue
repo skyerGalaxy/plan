@@ -14,6 +14,7 @@ function onDateChange(date: dayjs.Dayjs) {
       planStore.month = 1;
       planStore.weekViewIndex = 1;
       planStore.dayViewIndex = 1;
+      planStore.yearChange = true;
 }
 </script>
 

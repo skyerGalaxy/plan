@@ -1,12 +1,25 @@
 <script lang="ts" setup>
+import { ref,onMounted} from 'vue';
 import AddPlanButton from '@/components/PlanSwiper/AddPlanButton.vue';
 import { usePlanerStore } from '@/stores/planStore';
 
 const planStore = usePlanerStore();
 
-defineProps({
-  slideDate:String ,
-})
+interface Task {
+  [key: string]: any;
+}
+
+const props = defineProps<{
+  slideDate: string;
+  taskData: Task[];
+}>();
+
+
+const task = ref(props.taskData)
+
+onMounted(() => {
+  console.log("listview",props.taskData,props.slideDate);
+});
 </script>
 
 
@@ -19,12 +32,20 @@ defineProps({
   </div>
   <hr style="margin: 10px;border-color:azure;"/>
   <div class="list-container">
-    <div v-if="planStore.cycleValue == 1 || planStore.cycleValue == 2 || planStore.cycleValue == 3"  class="list-item">
-      quarterView style/monthView style/weekView style
-    </div>
-    <div v-else>
-      <div>dayView style</div>
-    </div>
+<div v-for="item in task" class="list-item" :key="item.id">
+  <template v-if="planStore.cycleValue === 1">
+    {{ item.task }}
+  </template>
+  <template v-else-if="planStore.cycleValue === 2">
+    {{ item.task }}
+  </template>
+  <template v-else-if="planStore.cycleValue === 3">
+    {{ item.task }}
+  </template>
+  <template v-else-if="planStore.cycleValue === 4">
+    {{ item.task }}
+  </template>
+</div>
   </div>
 </template>
 

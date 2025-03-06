@@ -1,7 +1,8 @@
 import dayjs from 'dayjs';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 import { usePlanerStore } from '@/stores/planStore';
-import { getTaskFromDay } from './supabaseFunction';
+import { getTaskFromDay,getTaskFromQuarter,getTaskFromMonth,getTaskFromWeek } from './supabaseFunction';
+import { get } from 'http';
 
 
 
@@ -32,7 +33,11 @@ export const getCurrentDate = async () => {
     const weekActiveIndex = weekInMonth-1;
     const dayActiveIndex = daysInWeek-1;
 
-    const initialData = await getTaskFromDay(currentYear, currentMonth, weekInMonth);
+    const initDaydata = await getTaskFromDay(currentYear, currentMonth, weekInMonth);
+    const initQuarterData = await getTaskFromQuarter(currentYear);
+    const initMonthData = await getTaskFromMonth(currentYear, currentQuarter);
+    const initWeekData = await getTaskFromWeek(currentYear, currentMonth);
+
 
     const planStore = usePlanerStore();
     planStore.$patch({
@@ -46,7 +51,10 @@ export const getCurrentDate = async () => {
         monthActiveIndex: monthActiveIndex,
         weekActiveIndex: weekActiveIndex,
         dayActiveIndex: dayActiveIndex,
-        dayData: initialData
+        quarterData: initQuarterData,
+        monthData: initMonthData,
+        weekData: initWeekData,
+        dayData: initDaydata
     });
 
     return {
