@@ -1,11 +1,13 @@
 <script lang="ts" setup>
-  import { ref, watch } from 'vue';
+  import { ref } from 'vue';
 
   import addLightImage from '@/assets/add_light.svg';
   import WhiteTomatoIcon from '@/assets/white_clock.svg';
   import ColorTomatoIcon from '@/assets/red_clock.svg';
-  import { DownOutlined } from '@ant-design/icons-vue';
+  import { notification } from 'ant-design-vue';
+  import { DownOutlined, PlayCircleTwoTone } from '@ant-design/icons-vue';
   import RangeButton from './RangeButton.vue';
+
   import {
     insertTaskToDay,
     insertTaskToQuarter,
@@ -26,12 +28,7 @@
   }>();
 
   const task = ref(props.taskData);
-  watch(
-    () => task,
-    newValue => {
-      console.log(newValue);
-    }
-  );
+
   //modal control
   const modalVisible = ref<boolean>(false);
   const taskValue = ref<string>('');
@@ -65,6 +62,22 @@
     parentTaskText.value = '选择父任务';
   }
 
+  const openNotificationWithIcon = (type: 'success' | 'error') => {
+    let message = '';
+    let description = '';
+    if (type === 'success') {
+      message = '添加成功';
+      description = '任务已经添加到计划中';
+    } else {
+      message = '添加失败';
+      description = '请检查网络连接或者联系管理员';
+    }
+    return notification[type]({
+      message: message,
+      description: description,
+    });
+  };
+
   async function modelOk() {
     //check taskData whether is valid
     //submit the plan to supabase
@@ -87,6 +100,7 @@
           });
           confirmLoading.value = false;
           planStore.isQuarterDataChanged = true;
+          openNotificationWithIcon('success');
         });
         break;
       case 2:
@@ -111,6 +125,7 @@
           });
           confirmLoading.value = false;
           planStore.isMonthDataChanged = true;
+          openNotificationWithIcon('success');
         });
         break;
       case 3:
@@ -135,6 +150,7 @@
           });
           confirmLoading.value = false;
           planStore.isWeekDataChanged = true;
+          openNotificationWithIcon('success');
         });
         break;
       case 4:
@@ -163,6 +179,7 @@
             isFinished: false,
           });
           planStore.isDayDataChanged = true;
+          openNotificationWithIcon('success');
         });
     }
     //reset the modal
@@ -222,7 +239,6 @@
               <div
                 v-for="index in 4"
                 :key="index"
-                class="rate-item"
                 @click="pomodoroCount = index"
                 @mouseenter="hoverIndex = index"
                 @mouseleave="hoverIndex = 0"
@@ -240,20 +256,38 @@
   </div>
   <hr style="margin: 10px; border-color: azure" />
   <div class="list-container">
-    <div v-for="item in task" class="list-item" :key="item.id">
-      <template v-if="planStore.cycleValue === 1">
-        {{ item.task }}
+    <a-list item-layout="vertical" :data-source="task" class="full-width-list">
+      <template #renderItem="{ item }">
+        <a-list-item>
+          <template #actions>
+            <div style="margin-left: 50px">
+              <div style="display: flex; align-items: center; gap: 8px">
+                <RangeButton :range="item.range" :disable="true" />
+                <div class="rate-container">
+                  <div v-for="index in 4" :key="index">
+                    <img
+                      :src="index <= item.pomodoro_count ? coloredIcon : whiteIcon"
+                      class="tomato-icon"
+                      style="cursor: grab"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+          <a-list-item-meta>
+            <template #title>
+              <span>{{ item.task }}</span>
+            </template>
+            <template #avatar>
+              <a-avatar>
+                <PlayCircleTwoTone twoToneColor="#52c41a" style="font-size: 20px" />
+              </a-avatar>
+            </template>
+          </a-list-item-meta>
+        </a-list-item>
       </template>
-      <template v-else-if="planStore.cycleValue === 2">
-        {{ item.task }}
-      </template>
-      <template v-else-if="planStore.cycleValue === 3">
-        {{ item.task }}
-      </template>
-      <template v-else-if="planStore.cycleValue === 4">
-        {{ item.task }}
-      </template>
-    </div>
+    </a-list>
   </div>
 </template>
 
@@ -269,18 +303,26 @@
 
   .list-container {
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     width: 100%;
     flex-wrap: wrap;
     max-height: 500px;
     overflow-y: auto;
   }
-  .list-item {
-    display: flex;
-    flex-direction: row;
-    margin: 10px;
-    padding: 10px;
-    width: 300px;
+
+  :deep(.full-width-list) {
+    width: 100%;
+  }
+
+  :deep(.ant-list-item) {
+    width: 100%;
+  }
+
+  :deep(.ant-list-item-meta) {
+    width: 100%;
+  }
+  :deep(.ant-avatar) {
+    background-color: white;
   }
 
   .circle-checkbox:checked {
@@ -338,6 +380,11 @@
   }
   .description {
     color: #888;
+  }
+
+  .task-content {
+    padding: 10px;
+    width: 100%;
   }
 
   .rate-container {
