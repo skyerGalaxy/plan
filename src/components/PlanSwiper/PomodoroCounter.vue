@@ -1,12 +1,13 @@
 <script lang="ts" setup>
   import { ref } from 'vue';
 
+  import WhiteTomatoIcon from '@/assets/white_clock.svg';
+  import ColorTomatoIcon from '@/assets/red_clock.svg';
+
   interface Props {
     count?: number; // 当前番茄数
     maxCount?: number; // 最大番茄数
     readonly?: boolean; // 是否只读
-    coloredIcon: string; // 彩色图标
-    whiteIcon: string; // 白色图标
   }
 
   const props = withDefaults(defineProps<Props>(), {
@@ -50,7 +51,7 @@
       @mouseleave="handleMouseLeave"
     >
       <img
-        :src="index <= (hoverIndex || count) ? coloredIcon : whiteIcon"
+        :src="index <= (hoverIndex || count) ? ColorTomatoIcon : WhiteTomatoIcon"
         class="tomato-icon"
         :class="{ 'cursor-grab': readonly, 'cursor-pointer': !readonly }"
       />
