@@ -18,6 +18,5 @@ app.use(pinia);
 app.use(router);
 
 await getCurrentDate().then(res => {
-  console.log('完成');
   app.use(Antd).mount('#app');
 });

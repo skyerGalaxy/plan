@@ -7,6 +7,7 @@
   import { notification } from 'ant-design-vue';
   import { DownOutlined, PlayCircleTwoTone } from '@ant-design/icons-vue';
   import RangeButton from './RangeButton.vue';
+  import PomodoroCounter from './PomodoroCounter.vue';
 
   import {
     insertTaskToDay,
@@ -27,7 +28,7 @@
     taskData: Task[];
   }>();
 
-  const task = ref(props.taskData);
+  const taskList = ref(props.taskData);
 
   //modal control
   const modalVisible = ref<boolean>(false);
@@ -47,7 +48,7 @@
     parentTaskIndex.value = e.key;
   }
 
-  function modelCancel() {
+  function modalCancel() {
     modalVisible.value = false;
     taskValue.value = '';
     planStore.taskRangeIndex = 1;
@@ -78,123 +79,114 @@
     });
   };
 
-  async function modelOk() {
-    //check taskData whether is valid
-    //submit the plan to supabase
-    switch (planStore.cycleValue) {
-      case 1:
-        confirmLoading.value = true;
-        await insertTaskToQuarter(
-          taskValue.value,
-          planStore.year,
-          planStore.quarter,
-          isLoop.value,
-          planStore.taskRangeIndex
-        ).then(() => {
-          task.value.push({
-            task: taskValue.value,
-            year: planStore.year,
-            quarter: planStore.quarter,
-            range: planStore.taskRangeIndex,
-            isLoop: isLoop.value,
-          });
-          confirmLoading.value = false;
-          planStore.isQuarterDataChanged = true;
-          openNotificationWithIcon('success');
-        });
-        break;
-      case 2:
-        confirmLoading.value = true;
-        await insertTaskToMonth(
-          1,
-          planStore.year,
-          planStore.month,
-          planStore.quarter,
-          taskValue.value,
-          isLoop.value,
-          planStore.taskRangeIndex
-        ).then(() => {
-          task.value.push({
-            quarterly_id: 1,
-            year: planStore.year,
-            month: planStore.month,
-            quarter: planStore.quarter,
-            task: taskValue.value,
-            range: planStore.taskRangeIndex,
-            isLoop: isLoop.value,
-          });
-          confirmLoading.value = false;
-          planStore.isMonthDataChanged = true;
-          openNotificationWithIcon('success');
-        });
-        break;
-      case 3:
-        confirmLoading.value = true;
-        await insertTaskToWeek(
-          1,
-          planStore.year,
-          planStore.month,
-          planStore.weekViewIndex,
-          taskValue.value,
-          isLoop.value,
-          planStore.taskRangeIndex
-        ).then(() => {
-          task.value.push({
-            monthly_id: 1,
-            year: planStore.year,
-            month: planStore.month,
-            week: planStore.weekViewIndex,
-            task: taskValue.value,
-            range: planStore.taskRangeIndex,
-            isLoop: isLoop.value,
-          });
-          confirmLoading.value = false;
-          planStore.isWeekDataChanged = true;
-          openNotificationWithIcon('success');
-        });
-        break;
-      case 4:
-        confirmLoading.value = true;
-        await insertTaskToDay(
-          parentTaskIndex.value,
-          planStore.year,
-          planStore.month,
-          planStore.weekViewIndex,
-          props.slideDate,
-          taskValue.value,
-          pomodoroCount.value,
-          planStore.taskRangeIndex
-        ).then(() => {
-          confirmLoading.value = false;
-          task.value.push({
-            weekly_id: parentTaskIndex.value,
-            year: planStore.year,
-            month: planStore.month,
-            week: planStore.weekViewIndex,
-            day: props.slideDate,
-            task: taskValue.value,
-            pomodoro_count: pomodoroCount.value,
-            range: planStore.taskRangeIndex,
-            finish_pomodoro: 0,
-            isFinished: false,
-          });
-          planStore.isDayDataChanged = true;
-          openNotificationWithIcon('success');
-        });
+  async function modalOk() {
+    confirmLoading.value = true;
+    if (!navigator.onLine) {
+      openNotificationWithIcon('error');
+    } else {
+      try {
+        switch (planStore.cycleValue) {
+          case 1:
+            await insertTaskToQuarter(
+              taskValue.value,
+              planStore.year,
+              planStore.quarter,
+              isLoop.value,
+              planStore.taskRangeIndex
+            );
+
+            taskList.value.push({
+              task: taskValue.value,
+              year: planStore.year,
+              quarter: planStore.quarter,
+              range: planStore.taskRangeIndex,
+              isLoop: isLoop.value,
+            });
+            planStore.isQuarterDataChanged = true;
+            break;
+
+          case 2:
+            await insertTaskToMonth(
+              1,
+              planStore.year,
+              planStore.month,
+              planStore.quarter,
+              taskValue.value,
+              isLoop.value,
+              planStore.taskRangeIndex
+            );
+
+            taskList.value.push({
+              quarterly_id: 1,
+              year: planStore.year,
+              month: planStore.month,
+              quarter: planStore.quarter,
+              task: taskValue.value,
+              range: planStore.taskRangeIndex,
+              isLoop: isLoop.value,
+            });
+            planStore.isMonthDataChanged = true;
+            break;
+
+          case 3:
+            await insertTaskToWeek(
+              1,
+              planStore.year,
+              planStore.month,
+              planStore.weekViewIndex,
+              taskValue.value,
+              isLoop.value,
+              planStore.taskRangeIndex
+            );
+
+            taskList.value.push({
+              monthly_id: 1,
+              year: planStore.year,
+              month: planStore.month,
+              week: planStore.weekViewIndex,
+              task: taskValue.value,
+              range: planStore.taskRangeIndex,
+              isLoop: isLoop.value,
+            });
+            planStore.isWeekDataChanged = true;
+            break;
+
+          case 4:
+            await insertTaskToDay(
+              parentTaskIndex.value,
+              planStore.year,
+              planStore.month,
+              planStore.weekViewIndex,
+              props.slideDate,
+              taskValue.value,
+              pomodoroCount.value,
+              planStore.taskRangeIndex
+            );
+
+            taskList.value.push({
+              weekly_id: parentTaskIndex.value,
+              year: planStore.year,
+              month: planStore.month,
+              week: planStore.weekViewIndex,
+              day: props.slideDate,
+              task: taskValue.value,
+              pomodoro_count: pomodoroCount.value,
+              range: planStore.taskRangeIndex,
+              finish_pomodoro: 0,
+              isFinished: false,
+            });
+            planStore.isDayDataChanged = true;
+            break;
+        }
+        openNotificationWithIcon('success');
+      } catch (error) {
+        openNotificationWithIcon('error');
+      }
     }
-    //reset the modal
-    modalVisible.value = false;
-    taskValue.value = '';
-    planStore.taskRangeIndex = 1;
-    planStore.taskRangeInfo = {
-      label: '重要且紧急',
-      value: 1,
-      class: 'priority-urgent-important',
-      symbol: 'Ⅰ',
-    };
-    isLoop.value = false;
-    pomodoroCount.value = 0;
-    parentTaskText.value = '选择父任务';
+
+    // 重置表单
+    confirmLoading.value = false;
+    modalCancel();
   }
 </script>
 
@@ -212,8 +204,8 @@
         v-model:open="modalVisible"
         centered
         :confirm-loading="confirmLoading"
-        @cancel="modelCancel"
-        @ok="modelOk"
+        @cancel="modalCancel"
+        @ok="modalOk"
       >
         <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 40px">
           <div style="display: flex; gap: 10px; margin-bottom: 10px">
@@ -236,18 +228,11 @@
               </a-button>
             </a-dropdown>
             <div class="rate-container" v-if="planStore.cycleValue == 4">
-              <div
-                v-for="index in 4"
-                :key="index"
-                @click="pomodoroCount = index"
-                @mouseenter="hoverIndex = index"
-                @mouseleave="hoverIndex = 0"
-              >
-                <img
-                  :src="index <= (hoverIndex || pomodoroCount) ? coloredIcon : whiteIcon"
-                  class="tomato-icon"
-                />
-              </div>
+              <PomodoroCounter
+                v-model:count="pomodoroCount"
+                :colored-icon="coloredIcon"
+                :white-icon="whiteIcon"
+              />
             </div>
           </div>
         </div>
@@ -256,22 +241,19 @@
   </div>
   <hr style="margin: 10px; border-color: azure" />
   <div class="list-container">
-    <a-list item-layout="vertical" :data-source="task" class="full-width-list">
+    <a-list item-layout="vertical" :data-source="taskList" class="full-width-list">
       <template #renderItem="{ item }">
         <a-list-item>
           <template #actions>
             <div style="margin-left: 50px">
               <div style="display: flex; align-items: center; gap: 8px">
                 <RangeButton :range="item.range" :disable="true" />
-                <div class="rate-container">
-                  <div v-for="index in 4" :key="index">
-                    <img
-                      :src="index <= item.pomodoro_count ? coloredIcon : whiteIcon"
-                      class="tomato-icon"
-                      style="cursor: grab"
-                    />
-                  </div>
-                </div>
+                <PomodoroCounter
+                  :count="item.pomodoro_count"
+                  :colored-icon="coloredIcon"
+                  :white-icon="whiteIcon"
+                  readonly
+                />
               </div>
             </div>
           </template>
