@@ -3,12 +3,18 @@
   import RangeButton from './RangeButton.vue';
   import PomodoroCounter from './PomodoroCounter.vue';
 
-  defineProps({
+  const props = defineProps({
     item: {
       type: Object,
       required: true,
     },
   });
+
+  const emit = defineEmits(['openModal']);
+
+  const handleOpenModal = () => {
+    emit('openModal', props.item);
+  };
 </script>
 
 <template>
@@ -16,14 +22,16 @@
     <template #actions>
       <div style="margin-left: 50px">
         <div style="display: flex; align-items: center; gap: 8px">
-          <RangeButton :range="item.range" :disable="true" />
-          <PomodoroCounter :count="item.pomodoro_count" readonly />
+          <RangeButton :range="props.item.range" :disable="true" />
+          <PomodoroCounter :count="props.item.pomodoro_count" readonly />
         </div>
       </div>
     </template>
     <a-list-item-meta>
       <template #title>
-        <span>{{ item.task }}</span>
+        <div @click="handleOpenModal" style="cursor: pointer">
+          <span>{{ props.item.task }}</span>
+        </div>
       </template>
       <template #avatar>
         <a-avatar>

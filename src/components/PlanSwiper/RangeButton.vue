@@ -33,8 +33,14 @@
     }
   });
 
-  const toggleDropdown = () => {
-    isDropdownOpen.value = !isDropdownOpen.value;
+  const showDropdown = () => {
+    if (!props.disable) {
+      isDropdownOpen.value = true;
+    }
+  };
+
+  const hideDropdown = () => {
+    isDropdownOpen.value = false;
   };
 
   const selectPriority = option => {
@@ -62,9 +68,9 @@
 </script>
 
 <template>
-  <div class="priority-dropdown">
+  <div class="priority-dropdown" @mouseleave="hideDropdown">
     <button
-      @click="toggleDropdown"
+      @mouseenter="showDropdown"
       class="dropdown-button"
       :style="{
         backgroundColor: buttonColor,

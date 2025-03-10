@@ -1,11 +1,8 @@
 <script lang="ts" setup>
-  import { ref } from 'vue';
+  import { ref, nextTick } from 'vue';
 
   import addLightImage from '@/assets/add_light.svg';
 
-  import { PlayCircleTwoTone } from '@ant-design/icons-vue';
-  import RangeButton from './RangeButton.vue';
-  import PomodoroCounter from './PomodoroCounter.vue';
   import TaskModal from './TaskModal.vue';
   import TaskListItem from './TaskListItem.vue';
 
@@ -21,9 +18,18 @@
 
   //modal control
   const modalVisible = ref<boolean>(false);
+  const currentTask = ref({});
 
   function handleTaskAdded(newTask: any) {
     taskList.value.push(newTask);
+  }
+
+  function handleOpenModal(task: Task) {
+    currentTask.value = {};
+    nextTick(() => {
+      currentTask.value = task;
+      modalVisible.value = true;
+    });
   }
 </script>
 
@@ -37,20 +43,23 @@
       >
         <img :src="addLightImage" alt="Add Plan" style="width: 20px; height: 20px" />
       </button>
-      <TaskModal
-        v-model:visible="modalVisible"
-        :slide-date="slideDate"
-        @task-added="handleTaskAdded"
-      />
     </div>
   </div>
   <hr style="margin: 10px; border-color: azure" />
   <div class="list-container">
     <a-list item-layout="vertical" :data-source="taskList" class="full-width-list">
       <template #renderItem="{ item }">
-        <TaskListItem :item="item" />
+        <TaskListItem :item="item" @open-modal="handleOpenModal" />
       </template>
     </a-list>
+
+    <TaskModal
+      v-model:visible="modalVisible"
+      :task="currentTask"
+      operate-type="insert"
+      :slide-date="slideDate"
+      @task-added="handleTaskAdded"
+    />
   </div>
 </template>
 
