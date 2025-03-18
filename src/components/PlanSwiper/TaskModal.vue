@@ -10,6 +10,7 @@
     insertTaskToQuarter,
     insertTaskToWeek,
     insertTaskToMonth,
+    updateTask,
   } from '@/utils/supabaseFunction';
 
   const props = defineProps<{
@@ -25,6 +26,7 @@
   }>();
 
   const planStore = usePlanerStore();
+  const taskId = ref<number>(props.task.id);
   const taskValue = ref<string>(props.task.task || '');
   const isLoop = ref<boolean>(props.task.isLoop || false);
   const pomodoroCount = ref<number>(props.task.pomodoro_count || 0);
@@ -60,125 +62,6 @@
     return notification[type]({ message, description });
   };
 
-  async function modalOk() {
-    confirmLoading.value = true;
-    if (!navigator.onLine) {
-      openNotificationWithIcon('error');
-    } else {
-      if (!taskValue.value.trim() || pomodoroCount.value === 0) {
-        notification.warning({
-          message: '任务填写不完整',
-        });
-        confirmLoading.value = false;
-        modalCancel();
-      } else {
-        try {
-          let newTask;
-          switch (planStore.cycleValue) {
-            case 1:
-              await insertTaskToQuarter(
-                taskValue.value,
-                planStore.year,
-                planStore.quarter,
-                isLoop.value,
-                planStore.taskRangeIndex
-              );
-
-              newTask = {
-                task: taskValue.value,
-                year: planStore.year,
-                quarter: planStore.quarter,
-                range: planStore.taskRangeIndex,
-                isLoop: isLoop.value,
-              };
-              planStore.isQuarterDataChanged = true;
-              break;
-
-            case 2:
-              await insertTaskToMonth(
-                1,
-                planStore.year,
-                planStore.month,
-                planStore.quarter,
-                taskValue.value,
-                isLoop.value,
-                planStore.taskRangeIndex
-              );
-
-              newTask = {
-                quarterly_id: 1,
-                year: planStore.year,
-                month: planStore.month,
-                quarter: planStore.quarter,
-                task: taskValue.value,
-                range: planStore.taskRangeIndex,
-                isLoop: isLoop.value,
-              };
-              planStore.isMonthDataChanged = true;
-              break;
-
-            case 3:
-              await insertTaskToWeek(
-                1,
-                planStore.year,
-                planStore.month,
-                planStore.weekViewIndex,
-                taskValue.value,
-                isLoop.value,
-                planStore.taskRangeIndex
-              );
-
-              newTask = {
-                monthly_id: 1,
-                year: planStore.year,
-                month: planStore.month,
-                week: planStore.weekViewIndex,
-                task: taskValue.value,
-                range: planStore.taskRangeIndex,
-                isLoop: isLoop.value,
-              };
-              planStore.isWeekDataChanged = true;
-              break;
-
-            case 4:
-              await insertTaskToDay(
-                parentTaskIndex.value,
-                planStore.year,
-                planStore.month,
-                planStore.weekViewIndex,
-                props.slideDate,
-                taskValue.value,
-                pomodoroCount.value,
-                planStore.taskRangeIndex
-              );
-
-              newTask = {
-                weekly_id: parentTaskIndex.value,
-                year: planStore.year,
-                month: planStore.month,
-                week: planStore.weekViewIndex,
-                day: props.slideDate,
-                task: taskValue.value,
-                pomodoro_count: pomodoroCount.value,
-                range: planStore.taskRangeIndex,
-                finish_pomodoro: 0,
-                isFinished: false,
-              };
-              planStore.isDayDataChanged = true;
-              break;
-          }
-          emit('task-added', newTask);
-          openNotificationWithIcon('success');
-        } catch (error) {
-          openNotificationWithIcon('error');
-        }
-      }
-    }
-    // 重置表单
-    confirmLoading.value = false;
-    modalCancel();
-  }
-
   watch(
     () => props.task,
     newTask => {
@@ -192,6 +75,188 @@
       deep: true,
     }
   );
+
+  async function modalOk() {
+    confirmLoading.value = true;
+    if (!navigator.onLine) {
+      openNotificationWithIcon('error');
+    } else {
+      if (!taskValue.value.trim() || pomodoroCount.value === 0) {
+        notification.warning({
+          message: '任务填写不完整',
+        });
+        confirmLoading.value = false;
+        modalCancel();
+      } else {
+        if (props.operateType === 'insert') {
+          try {
+            let newTask;
+            switch (planStore.cycleValue) {
+              case 1:
+                await insertTaskToQuarter(
+                  taskValue.value,
+                  planStore.year,
+                  planStore.quarter,
+                  isLoop.value,
+                  planStore.taskRangeIndex
+                );
+
+                newTask = {
+                  task: taskValue.value,
+                  year: planStore.year,
+                  quarter: planStore.quarter,
+                  range: planStore.taskRangeIndex,
+                  isLoop: isLoop.value,
+                };
+                planStore.isQuarterDataChanged = true;
+                break;
+
+              case 2:
+                await insertTaskToMonth(
+                  1,
+                  planStore.year,
+                  planStore.month,
+                  planStore.quarter,
+                  taskValue.value,
+                  isLoop.value,
+                  planStore.taskRangeIndex
+                );
+
+                newTask = {
+                  quarterly_id: 1,
+                  year: planStore.year,
+                  month: planStore.month,
+                  quarter: planStore.quarter,
+                  task: taskValue.value,
+                  range: planStore.taskRangeIndex,
+                  isLoop: isLoop.value,
+                };
+                planStore.isMonthDataChanged = true;
+                break;
+
+              case 3:
+                await insertTaskToWeek(
+                  1,
+                  planStore.year,
+                  planStore.month,
+                  planStore.weekViewIndex,
+                  taskValue.value,
+                  isLoop.value,
+                  planStore.taskRangeIndex
+                );
+
+                newTask = {
+                  monthly_id: 1,
+                  year: planStore.year,
+                  month: planStore.month,
+                  week: planStore.weekViewIndex,
+                  task: taskValue.value,
+                  range: planStore.taskRangeIndex,
+                  isLoop: isLoop.value,
+                };
+                planStore.isWeekDataChanged = true;
+                break;
+
+              case 4:
+                await insertTaskToDay(
+                  parentTaskIndex.value,
+                  planStore.year,
+                  planStore.month,
+                  planStore.weekViewIndex,
+                  props.slideDate,
+                  taskValue.value,
+                  pomodoroCount.value,
+                  planStore.taskRangeIndex
+                );
+
+                newTask = {
+                  weekly_id: parentTaskIndex.value,
+                  year: planStore.year,
+                  month: planStore.month,
+                  week: planStore.weekViewIndex,
+                  day: props.slideDate,
+                  task: taskValue.value,
+                  pomodoro_count: pomodoroCount.value,
+                  range: planStore.taskRangeIndex,
+                  finish_pomodoro: 0,
+                  isFinished: false,
+                };
+                planStore.isDayDataChanged = true;
+                break;
+            }
+            emit('task-added', newTask);
+            openNotificationWithIcon('success');
+          } catch (error) {
+            openNotificationWithIcon('error');
+          }
+        } else if (props.operateType === 'update') {
+          let tableType;
+          let newTask = {};
+          switch (planStore.cycleValue) {
+            case 1:
+              tableType = 'QuarterlyPlans';
+              newTask = {
+                task: taskValue.value,
+                year: planStore.year,
+                quarter: planStore.quarter,
+                range: planStore.taskRangeIndex,
+                isLoop: isLoop.value,
+              };
+              break;
+            case 2:
+              tableType = 'MonthlyPlans';
+              newTask = {
+                quarterly_id: 1,
+                year: planStore.year,
+                month: planStore.month,
+                quarter: planStore.quarter,
+                task: taskValue.value,
+                range: planStore.taskRangeIndex,
+                isLoop: isLoop.value,
+              };
+              break;
+            case 3:
+              tableType = 'WeeklyPlans';
+              newTask = {
+                monthly_id: 1,
+                year: planStore.year,
+                month: planStore.month,
+                week: planStore.weekViewIndex,
+                task: taskValue.value,
+                range: planStore.taskRangeIndex,
+                isLoop: isLoop.value,
+              };
+              break;
+            case 4:
+              tableType = 'DailyPlans';
+              newTask = {
+                weekly_id: parentTaskIndex.value,
+                year: planStore.year,
+                month: planStore.month,
+                week: planStore.weekViewIndex,
+                day: props.slideDate,
+                task: taskValue.value,
+                pomodoro_count: pomodoroCount.value,
+                range: planStore.taskRangeIndex,
+                finish_pomodoro: 0,
+                isFinished: false,
+              };
+              break;
+          }
+          try {
+            console.log('update task', newTask, tableType);
+            await updateTask(taskId.value, newTask, tableType || 'DailyPlans');
+            openNotificationWithIcon('success');
+          } catch (error) {
+            openNotificationWithIcon('error');
+          }
+        }
+      }
+      // 重置表单
+      confirmLoading.value = false;
+      modalCancel();
+    }
+  }
 </script>
 
 <template>

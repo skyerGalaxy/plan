@@ -19,6 +19,7 @@
   //modal control
   const modalVisible = ref<boolean>(false);
   const currentTask = ref({});
+  const operateType = ref<string>('');
 
   function handleTaskAdded(newTask: any) {
     taskList.value.push(newTask);
@@ -28,6 +29,7 @@
     currentTask.value = {};
     nextTick(() => {
       currentTask.value = task;
+      operateType.value = 'update';
       modalVisible.value = true;
     });
   }
@@ -38,7 +40,10 @@
     <div class="date">{{ slideDate }}</div>
     <div id="components-modal-demo-position">
       <button
-        @click="modalVisible = true"
+        @click="
+          operateType = 'add';
+          modalVisible = true;
+        "
         style="background: none; border: none; padding: 0; cursor: pointer"
       >
         <img :src="addLightImage" alt="Add Plan" style="width: 20px; height: 20px" />
@@ -56,7 +61,7 @@
     <TaskModal
       v-model:visible="modalVisible"
       :task="currentTask"
-      operate-type="insert"
+      :operate-type="operateType"
       :slide-date="slideDate"
       @task-added="handleTaskAdded"
     />

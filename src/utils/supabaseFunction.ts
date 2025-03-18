@@ -105,7 +105,7 @@ export async function getTaskFromQuarter(year: number): Promise<any[]> {
   try {
     const { data } = await supabase
       .from('QuarterlyPlans')
-      .select('year, quarter, task, isLoop, range')
+      .select('id,year, quarter, task, isLoop, range')
       .eq('year', year);
     return data || [];
   } catch (error) {
@@ -119,7 +119,7 @@ export async function getTaskFromMonth(year: number, quarter: number): Promise<a
   try {
     const { data } = await supabase
       .from('MonthlyPlans')
-      .select('quarterly_id, year, month, task, isLoop, range')
+      .select('id,quarterly_id, year, month, task, isLoop, range')
       .eq('year', year)
       .eq('quarter', quarter);
     return data || [];
@@ -134,7 +134,7 @@ export async function getTaskFromWeek(year: number, month: number): Promise<any[
   try {
     const { data } = await supabase
       .from('WeeklyPlans')
-      .select('monthly_id, year, month, week, task, isLoop, range')
+      .select('id,monthly_id, year, month, week, task, isLoop, range')
       .eq('year', year)
       .eq('month', month);
     return data || [];
@@ -150,7 +150,7 @@ export async function getTaskFromDay(year: number, month: number, week: number):
     const { data } = await supabase
       .from('DailyPlans')
       .select(
-        'weekly_id, year, month, week, day, task, pomodoro_count, finish_pomodoro, isFinished, range'
+        'id,weekly_id, year, month, week, day, task, pomodoro_count, finish_pomodoro, isFinished, range'
       )
       .eq('year', year)
       .eq('month', month)
@@ -159,5 +159,14 @@ export async function getTaskFromDay(year: number, month: number, week: number):
   } catch (error) {
     console.log('error', error);
     return [];
+  }
+}
+
+//Unified interface for updating tasks: quarterly, monthly, weekly, daily
+export async function updateTask(id: number, task: object, table: string) {
+  try {
+    await supabase.from(table).update(task).eq('id', id);
+  } catch (error) {
+    console.log('error', error);
   }
 }
