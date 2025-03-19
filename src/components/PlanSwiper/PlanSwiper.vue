@@ -7,7 +7,7 @@
   import { EffectCoverflow, Pagination } from 'swiper/modules';
   import dayjs from 'dayjs';
   import ListView from './ListView.vue';
-  import { ref, watch, computed } from 'vue';
+  import { ref, watch, computed, watchEffect } from 'vue';
   import { usePlanerStore } from '@/stores/planStore';
   const modules = [EffectCoverflow, Pagination];
 
@@ -48,87 +48,91 @@
   const isLoading = ref(false);
 
   watch(
-    () => planStore.cycleValue,
-    async (newValue, oldValue) => {
-      if (newValue !== oldValue) {
-        isLoading.value = true;
-        switch (planStore.cycleValue) {
-          case 1:
-            if (planStore.yearChange == false && planStore.isQuarterDataChanged == false) {
-              taskData.value = quarterData.value;
-              console.log('local', taskData.value);
-            } else {
-              const quarterResult = await getTaskFromQuarter(planStore.year);
-              taskData.value = quarterResult;
-              quarterData.value = quarterResult;
-              planStore.yearChange = false;
-              planStore.isQuarterDataChanged = false;
-            }
-            break;
-          case 2:
-            if (
-              planStore.yearChange == false &&
-              quarterChange.value == false &&
-              planStore.isMonthDataChanged == false
-            ) {
-              taskData.value = monthData.value;
-              console.log('local', taskData.value);
-            } else {
-              const monthResult = await getTaskFromMonth(planStore.year, planStore.quarter);
-              taskData.value = monthResult;
-              monthData.value = monthResult;
-              planStore.yearChange = false;
-              quarterChange.value = false;
-              planStore.isMonthDataChanged = false;
-            }
-            break;
-          case 3:
-            if (
-              planStore.yearChange == false &&
-              quarterChange.value == false &&
-              monthChange.value == false &&
-              planStore.isWeekDataChanged == false
-            ) {
-              taskData.value = weekData.value;
-              console.log('local', taskData.value);
-            } else {
-              const result = await getTaskFromWeek(planStore.year, planStore.month);
-              taskData.value = result;
-              weekData.value = result;
-              planStore.yearChange = false;
-              quarterChange.value = false;
-              monthChange.value = false;
-              planStore.isWeekDataChanged = false;
-            }
-            break;
-          case 4:
-            if (
-              planStore.yearChange == false &&
-              quarterChange.value == false &&
-              monthChange.value == false &&
-              weekChange.value == false &&
-              planStore.isDayDataChanged == false
-            ) {
-              taskData.value = dayData.value;
-              console.log('local', taskData.value);
-            } else {
-              const result = await getTaskFromDay(
-                planStore.year,
-                planStore.month,
-                planStore.weekViewIndex
-              );
-              taskData.value = result;
-              dayData.value = result;
-              planStore.yearChange = false;
-              quarterChange.value = false;
-              monthChange.value = false;
-              weekChange.value = false;
-              planStore.isDayDataChanged = false;
-            }
-            break;
-        }
-        isLoading.value = false;
+    [
+      () => planStore.cycleValue,
+      () => planStore.isQuarterDataChanged,
+      () => planStore.isMonthDataChanged,
+      () => planStore.isWeekDataChanged,
+      () => planStore.isDayDataChanged,
+    ],
+    async () => {
+      isLoading.value = true;
+      switch (planStore.cycleValue) {
+        case 1:
+          if (planStore.yearChange == false && planStore.isQuarterDataChanged == false) {
+            taskData.value = quarterData.value;
+            console.log('local', taskData.value);
+          } else {
+            const quarterResult = await getTaskFromQuarter(planStore.year);
+            taskData.value = quarterResult;
+            quarterData.value = quarterResult;
+            planStore.yearChange = false;
+            planStore.isQuarterDataChanged = false;
+          }
+          break;
+        case 2:
+          if (
+            planStore.yearChange == false &&
+            quarterChange.value == false &&
+            planStore.isMonthDataChanged == false
+          ) {
+            taskData.value = monthData.value;
+            console.log('local', taskData.value);
+          } else {
+            const monthResult = await getTaskFromMonth(planStore.year, planStore.quarter);
+            taskData.value = monthResult;
+            monthData.value = monthResult;
+            planStore.yearChange = false;
+            quarterChange.value = false;
+            planStore.isMonthDataChanged = false;
+          }
+          break;
+        case 3:
+          if (
+            planStore.yearChange == false &&
+            quarterChange.value == false &&
+            monthChange.value == false &&
+            planStore.isWeekDataChanged == false
+          ) {
+            taskData.value = weekData.value;
+            console.log('local', taskData.value);
+          } else {
+            const result = await getTaskFromWeek(planStore.year, planStore.month);
+            taskData.value = result;
+            weekData.value = result;
+            planStore.yearChange = false;
+            quarterChange.value = false;
+            monthChange.value = false;
+            planStore.isWeekDataChanged = false;
+          }
+          break;
+        case 4:
+          if (
+            planStore.yearChange == false &&
+            quarterChange.value == false &&
+            monthChange.value == false &&
+            weekChange.value == false &&
+            planStore.isDayDataChanged == false
+          ) {
+            taskData.value = dayData.value;
+            console.log('local', taskData.value);
+          } else {
+            const result = await getTaskFromDay(
+              planStore.year,
+              planStore.month,
+              planStore.weekViewIndex
+            );
+            taskData.value = result;
+            dayData.value = result;
+            planStore.yearChange = false;
+            quarterChange.value = false;
+            monthChange.value = false;
+            weekChange.value = false;
+            planStore.isDayDataChanged = false;
+          }
+          break;
       }
+      isLoading.value = false;
     }
   );
 

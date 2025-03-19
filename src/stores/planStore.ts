@@ -30,15 +30,6 @@ export const usePlanerStore = defineStore('planer', () => {
   const isMonthDataChanged = ref<boolean>(false);
   const isQuarterDataChanged = ref<boolean>(false);
 
-  //Add plan model view's store
-  const taskRangeInfo = ref<Object>({
-    label: '重要且紧急',
-    value: 1,
-    class: 'priority-urgent-important',
-    symbol: 'Ⅰ',
-  });
-  const taskRangeIndex = ref<number>(1); //1,2,3,4
-
   function getSlideCount(): number {
     switch (cycleValue.value) {
       case 1:
@@ -74,8 +65,6 @@ export const usePlanerStore = defineStore('planer', () => {
     monthActiveIndex,
     weekActiveIndex,
     dayActiveIndex,
-    taskRangeInfo,
-    taskRangeIndex,
     quarterData,
     monthData,
     weekData,

@@ -1,6 +1,5 @@
 <script setup>
-  import { ref } from 'vue';
-  import { usePlanerStore } from '@/stores/planStore';
+  import { ref, watch } from 'vue';
 
   const props = defineProps({
     range: {
@@ -13,25 +12,48 @@
     },
   });
 
-  const planStore = usePlanerStore();
+  const emit = defineEmits(['update:range']);
+
   const priorities = [
-    { label: '重要且紧急', value: 1, class: 'priority-urgent-important', symbol: 'Ⅰ' },
-    { label: '重要不紧急', value: 2, class: 'priority-important', symbol: 'Ⅱ' },
-    { label: '不重要紧急', value: 3, class: 'priority-urgent', symbol: 'Ⅲ' },
-    { label: '不重要不紧急', value: 4, class: 'priority-normal', symbol: 'Ⅳ' },
+    {
+      label: '重要且紧急',
+      value: 1,
+      class: 'priority-urgent-important',
+      symbol: 'Ⅰ',
+      buttonColor: 'rgba(255, 230, 230, 0.5)',
+    },
+    {
+      label: '重要不紧急',
+      value: 2,
+      class: 'priority-important',
+      symbol: 'Ⅱ',
+      buttonColor: 'rgba(255, 235, 204, 0.5)',
+    },
+    {
+      label: '不重要紧急',
+      value: 3,
+      class: 'priority-urgent',
+      symbol: 'Ⅲ',
+      buttonColor: 'rgba(230, 255, 230, 0.5)',
+    },
+    {
+      label: '不重要不紧急',
+      value: 4,
+      class: 'priority-normal',
+      symbol: 'Ⅳ',
+      buttonColor: 'rgba(230, 242, 255, 0.5)',
+    },
   ];
   const isDropdownOpen = ref(false);
-  const selectedPriority = ref(priorities.find(p => p.value === props.range) || priorities[0]);
-  const selectedValue = ref(props.range);
+  const selectedPriority = ref();
 
-  const buttonColor = ref('rgba(255, 230, 230, 0.5)');
-
-  planStore.$subscribe((_, state) => {
-    if (!props.disable) {
-      selectedPriority.value = state.taskRangeInfo;
-      selectedValue.value = state.taskRangeIndex;
-    }
-  });
+  watch(
+    () => props.range,
+    value => {
+      selectedPriority.value = priorities.find(p => p.value === value) || priorities[0];
+    },
+    { immediate: true }
+  );
 
   const showDropdown = () => {
     if (!props.disable) {
@@ -44,26 +66,8 @@
   };
 
   const selectPriority = option => {
-    planStore.taskRangeInfo = option;
-    planStore.taskRangeIndex = option.value;
-    selectedValue.value = option.value;
+    emit('update:range', option.value);
     isDropdownOpen.value = false;
-    switch (option.value) {
-      case 1:
-        buttonColor.value = 'rgba(255, 230, 230, 0.5)';
-        break;
-      case 2:
-        buttonColor.value = 'rgba(255, 235, 204, 0.5)';
-        break;
-      case 3:
-        buttonColor.value = 'rgba(230, 255, 230, 0.5)';
-        break;
-      case 4:
-        buttonColor.value = 'rgba(230, 242, 255, 0.5)';
-        break;
-      default:
-        break;
-    }
   };
 </script>
 
@@ -73,7 +77,7 @@
       @mouseenter="showDropdown"
       class="dropdown-button"
       :style="{
-        backgroundColor: buttonColor,
+        backgroundColor: selectedPriority.buttonColor,
         cursor: disable ? 'grab' : 'pointer',
         opacity: disable ? '0.6' : '1',
       }"

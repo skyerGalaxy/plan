@@ -14,16 +14,10 @@
     taskData: Task[];
   }>();
 
-  const taskList = ref(props.taskData);
-
   //modal control
   const modalVisible = ref<boolean>(false);
   const currentTask = ref({});
   const operateType = ref<string>('');
-
-  function handleTaskAdded(newTask: any) {
-    taskList.value.push(newTask);
-  }
 
   function handleOpenModal(task: Task) {
     currentTask.value = {};
@@ -41,7 +35,7 @@
     <div id="components-modal-demo-position">
       <button
         @click="
-          operateType = 'add';
+          operateType = 'insert';
           modalVisible = true;
         "
         style="background: none; border: none; padding: 0; cursor: pointer"
@@ -52,7 +46,7 @@
   </div>
   <hr style="margin: 10px; border-color: azure" />
   <div class="list-container">
-    <a-list item-layout="vertical" :data-source="taskList" class="full-width-list">
+    <a-list item-layout="vertical" :data-source="props.taskData" class="full-width-list">
       <template #renderItem="{ item }">
         <TaskListItem :item="item" @open-modal="handleOpenModal" />
       </template>
@@ -63,7 +57,6 @@
       :task="currentTask"
       :operate-type="operateType"
       :slide-date="slideDate"
-      @task-added="handleTaskAdded"
     />
   </div>
 </template>
