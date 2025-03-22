@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { notification } from 'ant-design-vue';
 
 const supabaseUrl = import.meta.env.VITE_supabaseProjectUrl;
 const supabaseKey = import.meta.env.VITE_anonKey;
@@ -168,5 +169,41 @@ export async function updateTask(id: number, task: object, table: string) {
     await supabase.from(table).update(task).eq('id', id);
   } catch (error) {
     console.log('error', error);
+  }
+}
+
+//defind delete task function
+export async function deleteTask(id: number, tableIndex: number) {
+  let table: string;
+  //define table name according to tableIndex
+  switch (tableIndex) {
+    case 1:
+      table = 'QuarterlyPlans';
+      break;
+    case 2:
+      table = 'MonthlyPlans';
+      break;
+    case 3:
+      table = 'WeeklyPlans';
+      break;
+    case 4:
+      table = 'DailyPlans';
+      break;
+    default:
+      console.log('Invalid table index');
+      return;
+  }
+  try {
+    await supabase.from(table).delete().eq('id', id);
+    notification.success({
+      message: 'Delete Success',
+      description: 'Task deleted successfully',
+    });
+  } catch (error) {
+    console.log('error', error);
+    notification.error({
+      message: 'Delete Failed',
+      description: 'Failed to delete task',
+    });
   }
 }

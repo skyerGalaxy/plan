@@ -1,15 +1,35 @@
-import { createRouter, createWebHashHistory } from 'vue-router'
-import { PlanView, StatisticsView, PersonView } from '@/views'
+import { createRouter, createWebHistory } from 'vue-router';
+import PlanView from '@/views/PlanView.vue';
+import PersonView from '@/views/PersonView.vue';
+import StatisticsView from '@/views/StatisticsView.vue';
+import PomodoroTimer from '@/components/PlanSwiper/PomodoroTimer.vue';
 
 const routes = [
-  { path: '/', component: PlanView },
-  { path: '/statis', component: StatisticsView },
-  { path: '/person', component: PersonView }
-]
+  {
+    path: '/',
+    name: 'Plan',
+    component: PlanView,
+  },
+  {
+    path: '/person',
+    name: 'Person',
+    component: PersonView,
+  },
+  {
+    path: '/statistics',
+    name: 'Statistics',
+    component: StatisticsView,
+  },
+  {
+    path: '/pomodoro',
+    name: 'PomodoroTimer',
+    component: PomodoroTimer,
+  },
+];
 
 const router = createRouter({
-  history: createWebHashHistory(), // 使用 hash 模式
+  history: createWebHistory(),
   routes,
-})
+});
 
-export default router
+export default router;
