@@ -97,7 +97,13 @@
           </a-dropdown>
         </template>
         <template #avatar>
-          <a-avatar @click="router.push('/pomodoro')">
+          <a-avatar
+            @click="
+              router.push(
+                `/pomodoro/${props.item.id}/${props.item.task}/${props.item.pomodoro_count}`
+              )
+            "
+          >
             <PlayCircleTwoTone twoToneColor="#52c41a" style="font-size: 20px" />
           </a-avatar>
         </template>

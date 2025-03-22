@@ -3,10 +3,10 @@
     <a-layout-content
       style="display: flex; justify-content: center; align-items: center; height: 100vh"
     >
-      <div class="timer-container">
+      <div class="timer-container" style="text-align: center">
         <!-- Timer Display with Circular Progress Bar -->
         <div class="timer-display">
-          <p>Current Task</p>
+          <p>{{ $route.params.taskName }}</p>
           <div class="timer">
             <svg class="progress-ring" width="200" height="200">
               <circle
@@ -24,15 +24,18 @@
         </div>
 
         <!-- Tomato Icons (Pomodoro) -->
-        <div class="tomato-container">
-          <span class="tomato" v-for="n in pomodoros" :key="n">&#127813;</span>
+        <div class="rate-container" style="justify-content: center">
+          <div v-for="n in Number($route.params.totalPomodoros)" :key="n">
+            <img :src="ColorTomatoIcon" class="tomato-icon" />
+          </div>
         </div>
 
         <!-- Timer Control Buttons -->
         <div class="buttons">
-          <button @click="startTimer" v-if="!isRunning">Start</button>
+          <button @click="startTimer" v-if="!isRunning && !isPaused">Start</button>
           <button @click="pauseTimer" v-if="isRunning">Pause</button>
-          <button @click="resetTimer">Reset</button>
+          <button @click="continueTimer" v-if="!isRunning && isPaused">Continue</button>
+          <button @click="endTimer" v-if="!isRunning && isPaused">End</button>
         </div>
       </div>
     </a-layout-content>
@@ -42,10 +45,12 @@
 <script setup>
   import { ref, computed, onMounted } from 'vue';
 
+  import ColorTomatoIcon from '@/assets/red_clock.svg';
+
   const minutes = ref(25);
   const seconds = ref(0);
   const isRunning = ref(false);
-  const pomodoros = ref(3); // Adjust the number of completed pomodoros
+  const isPaused = ref(false);
   let timerInterval = null;
   const totalTime = 25 * 60; // Total time in seconds
 
@@ -65,6 +70,7 @@
 
   const startTimer = () => {
     isRunning.value = true;
+    isPaused.value = false;
     timerInterval = setInterval(() => {
       if (seconds.value === 0) {
         if (minutes.value === 0) {
@@ -84,11 +90,17 @@
 
   const pauseTimer = () => {
     isRunning.value = false;
+    isPaused.value = true;
     clearInterval(timerInterval);
   };
 
-  const resetTimer = () => {
+  const continueTimer = () => {
+    startTimer();
+  };
+
+  const endTimer = () => {
     isRunning.value = false;
+    isPaused.value = false;
     clearInterval(timerInterval);
     minutes.value = 25;
     seconds.value = 0;
@@ -126,13 +138,9 @@
     flex-direction: column;
   }
 
-  .timer-container {
-    text-align: center;
-    padding: 40px;
-    width: 300px;
+  .rate-container {
     display: flex;
-    flex-direction: column;
-    justify-content: center;
+    gap: 8px;
   }
 
   .timer-display {
@@ -171,11 +179,15 @@
     margin-bottom: 30px;
   }
 
-  .tomato {
-    font-size: 30px;
-    color: #ff6347;
+  .tomato-icon {
+    width: 22px;
+    height: 22px;
   }
-
+  .buttons {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
   .buttons button {
     background-color: #ff6347;
     color: white;
