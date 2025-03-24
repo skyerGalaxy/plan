@@ -20,12 +20,15 @@
   const operateType = ref<string>('');
 
   function handleOpenModal(task: Task) {
-    currentTask.value = {};
-    nextTick(() => {
-      currentTask.value = task;
-      operateType.value = 'update';
-      modalVisible.value = true;
-    });
+    // currentTask.value = {};
+    // nextTick(() => {
+    //   currentTask.value = task;
+    //   operateType.value = 'update';
+    //   modalVisible.value = true;
+    // });
+    operateType.value = 'update';
+    currentTask.value = task;
+    modalVisible.value = true;
   }
 </script>
 
@@ -36,6 +39,7 @@
       <button
         @click="
           operateType = 'insert';
+          currentTask = {};
           modalVisible = true;
         "
         style="background: none; border: none; padding: 0; cursor: pointer"

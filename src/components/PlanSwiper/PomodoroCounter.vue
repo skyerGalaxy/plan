@@ -3,28 +3,34 @@
 
   import WhiteTomatoIcon from '@/assets/white_clock.svg';
   import ColorTomatoIcon from '@/assets/red_clock.svg';
+  import LightColorTomatoIcon from '@/assets/light_tomato.svg';
 
-  interface Props {
-    count?: number; // 当前番茄数
-    maxCount?: number; // 最大番茄数
-    readonly?: boolean; // 是否只读
-  }
+  const props = defineProps<{
+    totalPomodoro: number;
+    finishedPomodoo: number;
+    readonly?: boolean;
+  }>();
 
-  const props = withDefaults(defineProps<Props>(), {
-    count: 0,
-    maxCount: 4,
-    readonly: false,
-  });
+  const { totalPomodoro, finishedPomodoo, readonly = false } = props;
+
+  import { watch } from 'vue';
+  watch(
+    () => props.totalPomodoro,
+    newTotalPomodoro => {
+      console.log('newTotalPomodoro', newTotalPomodoro);
+      console.log('finishedPomodoo', finishedPomodoo);
+    }
+  );
 
   const emit = defineEmits<{
-    (e: 'update:count', value: number): void;
+    (e: 'update:totalPomodoro', value: number): void;
   }>();
 
   const hoverIndex = ref(0);
 
   function handleClick(index: number) {
     if (!props.readonly) {
-      emit('update:count', index);
+      emit('update:totalPomodoro', index);
     }
   }
 
@@ -44,14 +50,20 @@
 <template>
   <div class="rate-container">
     <div
-      v-for="index in maxCount"
+      v-for="index in 4"
       :key="index"
       @click="handleClick(index)"
       @mouseenter="handleMouseEnter(index)"
       @mouseleave="handleMouseLeave"
     >
       <img
-        :src="index <= (hoverIndex || count) ? ColorTomatoIcon : WhiteTomatoIcon"
+        :src="
+          index <= hoverIndex || index <= finishedPomodoo
+            ? ColorTomatoIcon
+            : index <= totalPomodoro
+            ? LightColorTomatoIcon
+            : WhiteTomatoIcon
+        "
         class="tomato-icon"
         :class="{ 'cursor-grab': readonly, 'cursor-pointer': !readonly }"
       />

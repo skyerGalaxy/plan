@@ -63,7 +63,11 @@
         <div style="margin-left: 50px">
           <div style="display: flex; align-items: center; gap: 8px">
             <RangeButton :range="props.item.range" :disable="true" />
-            <PomodoroCounter :count="props.item.pomodoro_count" readonly />
+            <PomodoroCounter
+              :total-pomodoro="props.item.pomodoro_count"
+              :finished-pomodoo="props.item.finish_pomodoro"
+              readonly
+            />
           </div>
         </div>
       </template>

@@ -29,6 +29,7 @@
   const taskValue = ref<string>(props.task.task || '');
   const isLoop = ref<boolean>(props.task.isLoop || false);
   const pomodoroCount = ref<number>(props.task.pomodoro_count || 0);
+  const finishedPomodoo = ref<number>(props.task.finished_pomodoro || 0);
   const rangeValue = ref<number>(props.task.range || 1);
   const parentTaskText = ref<string>('选择父任务');
   const parentTaskIndex = ref<number>(1);
@@ -42,10 +43,14 @@
 
   function modalCancel() {
     emit('update:visible', false);
+    taskId.value = 0;
     taskValue.value = '';
     isLoop.value = false;
     pomodoroCount.value = 0;
+    finishedPomodoo.value = 0;
+    rangeValue.value = 1;
     parentTaskText.value = '选择父任务';
+    parentTaskIndex.value = 1;
   }
 
   const openNotificationWithIcon = (type: 'success' | 'error') => {
@@ -57,11 +62,24 @@
   watch(
     () => props.task,
     newTask => {
-      if (newTask && Object.keys(newTask).length > 0) {
+      console.log('newTask', newTask);
+      if (props.operateType === 'insert') {
+        // 新建任务时重置所有字段
+        taskId.value = 0;
+        taskValue.value = '';
+        isLoop.value = false;
+        pomodoroCount.value = 0;
+        finishedPomodoo.value = 0;
+        rangeValue.value = 1;
+        parentTaskText.value = '选择父任务';
+        parentTaskIndex.value = 1;
+      } else if (newTask && Object.keys(newTask).length > 0) {
+        // 编辑任务时加载任务数据
         taskId.value = newTask.id;
         taskValue.value = newTask.task || '';
         isLoop.value = newTask.isLoop || false;
         pomodoroCount.value = newTask.pomodoro_count || 0;
+        finishedPomodoo.value = newTask.finish_pomodoro || 0;
         rangeValue.value = newTask.range || 1;
       }
     },
@@ -254,7 +272,10 @@
           </a-button>
         </a-dropdown>
         <div class="rate-container" v-if="planStore.cycleValue == 4">
-          <PomodoroCounter v-model:count="pomodoroCount" />
+          <PomodoroCounter
+            v-model:totalPomodoro="pomodoroCount"
+            :finished-pomodoo="finishedPomodoo"
+          />
         </div>
       </div>
     </div>
