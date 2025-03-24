@@ -11,14 +11,11 @@
     readonly?: boolean;
   }>();
 
-  const { totalPomodoro, finishedPomodoo, readonly = false } = props;
-
   import { watch } from 'vue';
   watch(
-    () => props.totalPomodoro,
+    () => props,
     newTotalPomodoro => {
       console.log('newTotalPomodoro', newTotalPomodoro);
-      console.log('finishedPomodoo', finishedPomodoo);
     }
   );
 
@@ -58,9 +55,9 @@
     >
       <img
         :src="
-          index <= hoverIndex || index <= finishedPomodoo
+          index <= hoverIndex || index <= props.finishedPomodoo
             ? ColorTomatoIcon
-            : index <= totalPomodoro
+            : index <= props.totalPomodoro
             ? LightColorTomatoIcon
             : WhiteTomatoIcon
         "
