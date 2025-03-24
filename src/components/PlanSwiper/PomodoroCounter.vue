@@ -11,14 +11,6 @@
     readonly?: boolean;
   }>();
 
-  import { watch } from 'vue';
-  watch(
-    () => props,
-    newTotalPomodoro => {
-      console.log('newTotalPomodoro', newTotalPomodoro);
-    }
-  );
-
   const emit = defineEmits<{
     (e: 'update:totalPomodoro', value: number): void;
   }>();
