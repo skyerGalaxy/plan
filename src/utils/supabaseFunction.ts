@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { notification } from 'ant-design-vue';
+import exp from 'constants';
 
 const supabaseUrl = import.meta.env.VITE_supabaseProjectUrl;
 const supabaseKey = import.meta.env.VITE_anonKey;
@@ -205,5 +206,59 @@ export async function deleteTask(id: number, tableIndex: number) {
       message: 'Delete Failed',
       description: 'Failed to delete task',
     });
+  }
+}
+
+///////////////query task for taskModal's parent task
+//query task from week table when view in daily view
+export async function getTaskFromWeekByDay(
+  year: number,
+  month: number,
+  week: number
+): Promise<any[]> {
+  try {
+    const { data } = await supabase
+      .from('WeeklyPlans')
+      .select('id, task, range')
+      .eq('year', year)
+      .eq('month', month)
+      .eq('week', week)
+      .neq('isLoop', true);
+    return data || [];
+  } catch (error) {
+    console.log('error', error);
+    return [];
+  }
+}
+
+//query task from month table when view in weekly view
+export async function getTaskFromMonthByWeek(year: number, month: number): Promise<any[]> {
+  try {
+    const { data } = await supabase
+      .from('MonthlyPlans')
+      .select('id, task, range')
+      .eq('year', year)
+      .eq('month', month)
+      .neq('isLoop', true);
+    return data || [];
+  } catch (error) {
+    console.log('error', error);
+    return [];
+  }
+}
+
+//query task from quarter table when view in monthly view
+export async function getTaskFromQuarterByMonth(year: number, quarter: number): Promise<any[]> {
+  try {
+    const { data } = await supabase
+      .from('QuarterlyPlans')
+      .select('id, task, range')
+      .eq('year', year)
+      .eq('quarter', quarter)
+      .neq('isLoop', true);
+    return data || [];
+  } catch (error) {
+    console.log('error', error);
+    return [];
   }
 }

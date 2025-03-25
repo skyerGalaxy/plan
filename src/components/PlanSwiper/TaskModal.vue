@@ -11,6 +11,9 @@
     insertTaskToWeek,
     insertTaskToMonth,
     updateTask,
+    getTaskFromWeekByDay,
+    getTaskFromMonthByWeek,
+    getTaskFromQuarterByMonth,
   } from '@/utils/supabaseFunction';
 
   const props = defineProps<{
@@ -31,6 +34,7 @@
   const pomodoroCount = ref<number>(props.task.pomodoro_count || 0);
   const finishedPomodoo = ref<number>(props.task.finished_pomodoro || 0);
   const rangeValue = ref<number>(props.task.range || 1);
+  const parentTaskList = ref<any[]>([]);
   const parentTaskText = ref<string>('选择父任务');
   const parentTaskIndex = ref<number>(1);
   const confirmLoading = ref<boolean>(false);
@@ -51,6 +55,8 @@
     rangeValue.value = 1;
     parentTaskText.value = '选择父任务';
     parentTaskIndex.value = 1;
+    parentTaskList.value = [];
+    confirmLoading.value = false;
   }
 
   const openNotificationWithIcon = (type: 'success' | 'error') => {
@@ -61,8 +67,7 @@
 
   watch(
     () => props.task,
-    newTask => {
-      console.log('newTask', newTask);
+    async newTask => {
       if (props.operateType === 'insert') {
         // 新建任务时重置所有字段
         taskId.value = 0;
@@ -81,6 +86,22 @@
         pomodoroCount.value = newTask.pomodoro_count || 0;
         finishedPomodoo.value = newTask.finish_pomodoro || 0;
         rangeValue.value = newTask.range || 1;
+      }
+
+      switch (planStore.cycleValue) {
+        case 2:
+          parentTaskList.value = await getTaskFromQuarterByMonth(newTask.year, newTask.quarter);
+          break;
+        case 3:
+          parentTaskList.value = await getTaskFromMonthByWeek(newTask.year, newTask.month);
+          break;
+        case 4:
+          parentTaskList.value = await getTaskFromWeekByDay(
+            newTask.year,
+            newTask.month,
+            newTask.week
+          );
+          break;
       }
     },
     {
@@ -261,9 +282,14 @@
         <a-dropdown v-if="planStore.cycleValue !== 1">
           <template #overlay>
             <a-menu @click="handleMenuClick">
-              <a-menu-item key="1">1st menu item</a-menu-item>
-              <a-menu-item key="2">444444444444444444444444444444</a-menu-item>
-              <a-menu-item key="3">3rd item</a-menu-item>
+              <a-menu-item v-for="(item, index) in parentTaskList" :key="index">
+                <span style="flex: 1">{{ item.task }}</span>
+                <RangeButton
+                  :style="{ 'margin-left': 'auto' }"
+                  :range="item.range"
+                  :disable="true"
+                />
+              </a-menu-item>
             </a-menu>
           </template>
           <a-button class="parent-task-button">
