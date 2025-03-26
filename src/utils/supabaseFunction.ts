@@ -16,9 +16,11 @@ export async function insertTaskToQuarter(
   range: number = 1
 ) {
   try {
-    await supabase
+    const { data, error } = await supabase
       .from('QuarterlyPlans')
-      .insert({ year: year, quarter: quarter, task: task, isLoop: isLoop, range: range });
+      .insert({ year: year, quarter: quarter, task: task, isLoop: isLoop, range: range })
+      .select();
+    return data ? data[0] : null;
   } catch (error) {
     console.log('error', error);
   }
@@ -35,15 +37,19 @@ export async function insertTaskToMonth(
   range: number = 1
 ) {
   try {
-    await supabase.from('MonthlyPlans').insert({
-      quarterly_id: quarter_id,
-      year: year,
-      month: month,
-      quarter: quarter,
-      task: task,
-      isLoop: isLoop,
-      range: range,
-    });
+    const { data } = await supabase
+      .from('MonthlyPlans')
+      .insert({
+        quarterly_id: quarter_id,
+        year: year,
+        month: month,
+        quarter: quarter,
+        task: task,
+        isLoop: isLoop,
+        range: range,
+      })
+      .select();
+    return data ? data[0] : null;
   } catch (error) {
     console.log('error', error);
   }
@@ -60,15 +66,19 @@ export async function insertTaskToWeek(
   range: number = 1
 ) {
   try {
-    await supabase.from('WeeklyPlans').insert({
-      monthly_id: monthly_id,
-      year: year,
-      month: month,
-      week: week,
-      task: task,
-      isLoop: isLoop,
-      range: range,
-    });
+    const { data } = await supabase
+      .from('WeeklyPlans')
+      .insert({
+        monthly_id: monthly_id,
+        year: year,
+        month: month,
+        week: week,
+        task: task,
+        isLoop: isLoop,
+        range: range,
+      })
+      .select();
+    return data ? data[0] : null;
   } catch (error) {
     console.log('error', error);
   }
@@ -86,16 +96,20 @@ export async function insertTaskToDay(
   range: number = 1
 ) {
   try {
-    await supabase.from('DailyPlans').insert({
-      weekly_id: weekly_id,
-      year: year,
-      month: month,
-      week: week,
-      day: day,
-      task: task,
-      pomodoro_count: pomodoro_count,
-      range: range,
-    });
+    const { data } = await supabase
+      .from('DailyPlans')
+      .insert({
+        weekly_id: weekly_id,
+        year: year,
+        month: month,
+        week: week,
+        day: day,
+        task: task,
+        pomodoro_count: pomodoro_count,
+        range: range,
+      })
+      .select();
+    return data ? data[0] : null;
   } catch (error) {
     console.log('Supabase Error:', error);
   }

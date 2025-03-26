@@ -2,6 +2,10 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import dayjs from 'dayjs';
 
+function calculateDaysInMonth(year: number, month: number): number {
+  return dayjs(`${year}-${month}-01`).daysInMonth();
+}
+
 export const usePlanerStore = defineStore('planer', () => {
   const cycleValue = ref<number>(4);
   const year = ref<number>(0);
@@ -18,10 +22,11 @@ export const usePlanerStore = defineStore('planer', () => {
   const dayActiveIndex = ref<number>(0);
 
   //data for every cycle view
-  const quarterData = ref([]);
-  const monthData = ref([]);
-  const weekData = ref([]);
-  const dayData = ref([]);
+  const quarterData = ref<any[]>([]);
+  const monthData = ref<any[]>([]);
+  const weekData = ref<any[]>([]);
+  const dayData = ref<any[]>([]);
+  const parentData = ref<any[]>([]); //父任务数据  
 
   // 年份是否发生变化的标志
   const yearChange = ref<boolean>(false);
@@ -37,17 +42,12 @@ export const usePlanerStore = defineStore('planer', () => {
       case 2:
         return 3;
       case 3:
-        const weekOfMonth: number = Math.ceil(
-          dayjs(`${year.value}-${month.value}-01`).daysInMonth() / 7
-        );
-        return weekOfMonth;
+        return Math.ceil(calculateDaysInMonth(year.value, month.value) / 7);
       case 4:
-        const daysInSelectedMonth: number = dayjs(`${year.value}-${month.value}-01`).daysInMonth();
-        if (weekViewIndex.value * 7 <= daysInSelectedMonth) {
-          return 7;
-        } else {
-          return daysInSelectedMonth - (weekViewIndex.value - 1) * 7;
-        }
+        const daysInSelectedMonth = calculateDaysInMonth(year.value, month.value);
+        return weekViewIndex.value * 7 <= daysInSelectedMonth
+          ? 7
+          : daysInSelectedMonth - (weekViewIndex.value - 1) * 7;
       default:
         return 7;
     }
@@ -69,6 +69,7 @@ export const usePlanerStore = defineStore('planer', () => {
     monthData,
     weekData,
     dayData,
+    parentData,
     getSlideCount,
     yearChange,
     isDayDataChanged,

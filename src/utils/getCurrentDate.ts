@@ -7,6 +7,7 @@ import {
   getTaskFromMonth,
   getTaskFromWeek,
 } from './supabaseFunction';
+import { an } from 'vitest/dist/chunks/reporters.D7Jzd9GS';
 
 dayjs.extend(quarterOfYear);
 
@@ -33,10 +34,23 @@ export const getCurrentDate = async () => {
   const weekActiveIndex = weekInMonth - 1;
   const dayActiveIndex = daysInWeek - 1;
 
+  let initParentData = <any[]>[];
+
   const initDaydata = await getTaskFromDay(currentYear, currentMonth, weekInMonth);
   const initQuarterData = await getTaskFromQuarter(currentYear);
   const initMonthData = await getTaskFromMonth(currentYear, currentQuarter);
-  const initWeekData = await getTaskFromWeek(currentYear, currentMonth);
+  const initWeekData = await getTaskFromWeek(currentYear, currentMonth).then(res => {
+    initParentData = res.filter(item => {
+      item.year = currentYear;
+      item.month = currentMonth;
+      item.week = weekInMonth;
+      return item.isLoop !== true;
+    });
+    return res;
+  });
+
+  console.log('initweekData', initWeekData);
+  console.log('initParentData', initParentData);
 
   const planStore = usePlanerStore();
   planStore.$patch({
@@ -54,6 +68,7 @@ export const getCurrentDate = async () => {
     monthData: initMonthData,
     weekData: initWeekData,
     dayData: initDaydata,
+    parentData: initParentData,
   });
 
   return {

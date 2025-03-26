@@ -30,111 +30,129 @@
   const weekData = ref<any[]>(planStore.weekData);
   const dayData = ref<any[]>(planStore.dayData);
 
+  const paretTask = ref<any[]>(
+    planStore.weekData.filter(
+      (item: any) =>
+        item.year === planStore.year &&
+        item.month === planStore.month &&
+        item.week === planStore.weekViewIndex
+    )
+  );
+
   const quarterChange = ref(false);
   const monthChange = ref(false);
   const weekChange = ref(false);
   const dayChange = ref(false);
 
-  const slideDateArray = ref<string[]>(
-    Array.from({ length: slideCount.value }, (_, i) => {
-      return dayjs(
-        `${planStore.year}-${planStore.month}-${(planStore.weekViewIndex - 1) * 7 + i + 1}`
-      ).format('YYYY-MM-DD');
-    })
-  );
+  const slideDateArray = computed(() => {
+    switch (planStore.cycleValue) {
+      case 1:
+        return Array.from({ length: slideCount.value }, (_, i) => {
+          return `${planStore.year}-第${i + 1}季度`;
+        });
+      case 2:
+        return Array.from({ length: slideCount.value }, (_, i) => {
+          return `${planStore.year}年-${(planStore.quarter - 1) * 3 + i + 1}月`;
+        });
+      case 3:
+        return Array.from({ length: slideCount.value }, (_, i) => {
+          return `${planStore.year}年-${planStore.month}月-第${i + 1}周`;
+        });
+      case 4:
+        return Array.from({ length: slideCount.value }, (_, i) => {
+          return dayjs(
+            `${planStore.year}-${planStore.month}-${(planStore.weekViewIndex - 1) * 7 + i + 1}`
+          ).format('YYYY-MM-DD');
+        });
+      default:
+        return [];
+    }
+  });
 
   const monthArray = ref<number[]>([1, 2, 3]);
 
   const isLoading = ref(false);
 
-  watch(
-    [
-      () => planStore.cycleValue,
-      () => planStore.isQuarterDataChanged,
-      () => planStore.isMonthDataChanged,
-      () => planStore.isWeekDataChanged,
-      () => planStore.isDayDataChanged,
-    ],
-    async () => {
-      isLoading.value = true;
-      switch (planStore.cycleValue) {
-        case 1:
-          if (planStore.yearChange == false && planStore.isQuarterDataChanged == false) {
-            taskData.value = quarterData.value;
-            console.log('local', taskData.value);
-          } else {
-            const quarterResult = await getTaskFromQuarter(planStore.year);
-            taskData.value = quarterResult;
-            quarterData.value = quarterResult;
-            planStore.yearChange = false;
-            planStore.isQuarterDataChanged = false;
-          }
-          break;
-        case 2:
-          if (
-            planStore.yearChange == false &&
-            quarterChange.value == false &&
-            planStore.isMonthDataChanged == false
-          ) {
-            taskData.value = monthData.value;
-            console.log('local', taskData.value);
-          } else {
-            const monthResult = await getTaskFromMonth(planStore.year, planStore.quarter);
-            taskData.value = monthResult;
-            monthData.value = monthResult;
-            planStore.yearChange = false;
-            quarterChange.value = false;
-            planStore.isMonthDataChanged = false;
-          }
-          break;
-        case 3:
-          if (
-            planStore.yearChange == false &&
-            quarterChange.value == false &&
-            monthChange.value == false &&
-            planStore.isWeekDataChanged == false
-          ) {
-            taskData.value = weekData.value;
-            console.log('local', taskData.value);
-          } else {
-            const result = await getTaskFromWeek(planStore.year, planStore.month);
-            taskData.value = result;
-            weekData.value = result;
-            planStore.yearChange = false;
-            quarterChange.value = false;
-            monthChange.value = false;
-            planStore.isWeekDataChanged = false;
-          }
-          break;
-        case 4:
-          if (
-            planStore.yearChange == false &&
-            quarterChange.value == false &&
-            monthChange.value == false &&
-            weekChange.value == false &&
-            planStore.isDayDataChanged == false
-          ) {
-            taskData.value = dayData.value;
-            console.log('local', taskData.value);
-          } else {
-            const result = await getTaskFromDay(
-              planStore.year,
-              planStore.month,
-              planStore.weekViewIndex
-            );
-            taskData.value = result;
-            dayData.value = result;
-            planStore.yearChange = false;
-            quarterChange.value = false;
-            monthChange.value = false;
-            weekChange.value = false;
-            planStore.isDayDataChanged = false;
-          }
-          break;
-      }
-      isLoading.value = false;
+  function resetFlags() {
+    planStore.yearChange = false;
+    quarterChange.value = false;
+    monthChange.value = false;
+    weekChange.value = false;
+    planStore.isQuarterDataChanged = false;
+    planStore.isMonthDataChanged = false;
+    planStore.isWeekDataChanged = false;
+    planStore.isDayDataChanged = false;
+  }
+
+  async function handleCycleValueChange() {
+    isLoading.value = true;
+    switch (planStore.cycleValue) {
+      case 1:
+        if (!planStore.yearChange) {
+          taskData.value = quarterData.value;
+        } else {
+          const quarterResult = await getTaskFromQuarter(planStore.year);
+          taskData.value = quarterResult;
+          quarterData.value = quarterResult;
+          resetFlags();
+        }
+        break;
+      case 2:
+        if (!planStore.yearChange && !quarterChange.value && !planStore.isQuarterDataChanged) {
+          taskData.value = monthData.value;
+        } else {
+          const monthResult = await getTaskFromMonth(planStore.year, planStore.quarter);
+          taskData.value = monthResult;
+          monthData.value = monthResult;
+          resetFlags();
+        }
+        planStore.parentData = quarterData.value.filter(
+          (item: any) => item.year === planStore.year && item.quarter === planStore.quarter
+        );
+        break;
+      case 3:
+        if (!planStore.yearChange && !quarterChange.value && !monthChange.value) {
+          taskData.value = weekData.value;
+        } else {
+          const result = await getTaskFromWeek(planStore.year, planStore.month);
+          taskData.value = result;
+          weekData.value = result;
+          resetFlags();
+        }
+        planStore.parentData = monthData.value.filter(
+          (item: any) => item.year === planStore.year && item.month === planStore.month
+        );
+        break;
+      case 4:
+        if (
+          !planStore.yearChange &&
+          !quarterChange.value &&
+          !monthChange.value &&
+          !weekChange.value
+        ) {
+          taskData.value = dayData.value;
+        } else {
+          const result = await getTaskFromDay(
+            planStore.year,
+            planStore.month,
+            planStore.weekViewIndex
+          );
+          taskData.value = result;
+          dayData.value = result;
+          resetFlags();
+        }
+        planStore.parentData = weekData.value.filter(
+          (item: any) =>
+            item.year === planStore.year &&
+            item.month === planStore.month &&
+            item.week === planStore.weekViewIndex
+        );
+        break;
     }
-  );
+    isLoading.value = false;
+  }
+
+  watch(() => planStore.cycleValue, handleCycleValueChange);
 
   planStore.$subscribe(async (_, state) => {
     slideCount.value = planStore.getSlideCount();
@@ -142,32 +160,18 @@
     switch (planStore.cycleValue) {
       case 1:
         activeIndex.value = planStore.quarterActiveIndex;
-        slideDateArray.value = Array.from({ length: slideCount.value }, (_, i) => {
-          return `${planStore.year}-第${i + 1}季度`;
-        });
         break;
       case 2:
         activeIndex.value = planStore.monthActiveIndex;
-        slideDateArray.value = Array.from({ length: slideCount.value }, (_, i) => {
-          return `${planStore.year}年-${(planStore.quarter - 1) * 3 + i + 1}月`;
-        });
         monthArray.value = Array.from({ length: slideCount.value }, (_, i) => {
           return (planStore.quarter - 1) * 3 + i + 1;
         });
         break;
       case 3:
         activeIndex.value = planStore.weekActiveIndex;
-        slideDateArray.value = Array.from({ length: slideCount.value }, (_, i) => {
-          return `${planStore.year}年-${planStore.month}月-第${i + 1}周`;
-        });
         break;
       case 4:
         activeIndex.value = planStore.dayActiveIndex;
-        slideDateArray.value = Array.from({ length: slideCount.value }, (_, i) => {
-          return dayjs(
-            `${planStore.year}-${planStore.month}-${(planStore.weekViewIndex - 1) * 7 + i + 1}`
-          ).format('YYYY-MM-DD');
-        });
         break;
     }
   });

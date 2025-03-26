@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-  import { ref, nextTick } from 'vue';
+  import { ref, onMounted } from 'vue';
 
   import addLightImage from '@/assets/add_light.svg';
 
@@ -9,26 +9,30 @@
   interface Task {
     [key: string]: any;
   }
+
   const props = defineProps<{
     slideDate: string;
     taskData: Task[];
   }>();
 
+  ///////////////test
+  console.log('taskData', props.taskData);
+
+  const taskData = ref(props.taskData);
+
   //modal control
   const modalVisible = ref<boolean>(false);
-  const currentTask = ref({});
+  const currentTask = ref<Task>({});
   const operateType = ref<string>('');
 
   function handleOpenModal(task: Task) {
-    // currentTask.value = {};
-    // nextTick(() => {
-    //   currentTask.value = task;
-    //   operateType.value = 'update';
-    //   modalVisible.value = true;
-    // });
     operateType.value = 'update';
-    currentTask.value = task;
+    currentTask.value = { ...task };
     modalVisible.value = true;
+  }
+
+  function handleTaskAdded(newTask: Task): void {
+    taskData.value.push(newTask);
   }
 </script>
 
@@ -44,13 +48,13 @@
         "
         style="background: none; border: none; padding: 0; cursor: pointer"
       >
-        <img :src="addLightImage" alt="Add Plan" style="width: 20px; height: 20px" />
+        <img :src="addLightImage" alt="Add Plan" class="add-icon" />
       </button>
     </div>
   </div>
-  <hr style="margin: 10px; border-color: azure" />
+  <hr class="divider" />
   <div class="list-container">
-    <a-list item-layout="vertical" :data-source="props.taskData" class="full-width-list">
+    <a-list item-layout="vertical" :data-source="taskData" class="full-width-list">
       <template #renderItem="{ item }">
         <TaskListItem :item="item" @open-modal="handleOpenModal" />
       </template>
@@ -61,6 +65,7 @@
       :task="currentTask"
       :operate-type="operateType"
       :slide-date="slideDate"
+      @task-added="handleTaskAdded"
     />
   </div>
 </template>
@@ -73,6 +78,23 @@
     padding: 5px;
     margin: 15px;
     font-size: larger;
+  }
+
+  .add-button {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  .add-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .divider {
+    margin: 10px;
+    border-color: azure;
   }
 
   .list-container {

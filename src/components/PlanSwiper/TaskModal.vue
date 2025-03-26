@@ -11,9 +11,6 @@
     insertTaskToWeek,
     insertTaskToMonth,
     updateTask,
-    getTaskFromWeekByDay,
-    getTaskFromMonthByWeek,
-    getTaskFromQuarterByMonth,
   } from '@/utils/supabaseFunction';
 
   const props = defineProps<{
@@ -25,19 +22,51 @@
 
   const emit = defineEmits<{
     (e: 'update:visible', value: boolean): void;
+    (e: 'task-added', task: any): void;
   }>();
 
-  const planStore = usePlanerStore();
   const taskId = ref<number>(props.task.id);
   const taskValue = ref<string>(props.task.task || '');
   const isLoop = ref<boolean>(props.task.isLoop || false);
   const pomodoroCount = ref<number>(props.task.pomodoro_count || 0);
   const finishedPomodoo = ref<number>(props.task.finished_pomodoro || 0);
   const rangeValue = ref<number>(props.task.range || 1);
-  const parentTaskList = ref<any[]>([]);
   const parentTaskText = ref<string>('选择父任务');
   const parentTaskIndex = ref<number>(1);
   const confirmLoading = ref<boolean>(false);
+
+  watch(
+    () => props.task,
+    newTask => {
+      // Remove array destructuring
+      if (props.operateType === 'insert') {
+        // Use props.operateType directly
+        // Reset fields for new task
+        taskId.value = 0;
+        taskValue.value = '';
+        isLoop.value = false;
+        pomodoroCount.value = 0;
+        finishedPomodoo.value = 0;
+        rangeValue.value = 1;
+        parentTaskText.value = '选择父任务';
+        parentTaskIndex.value = 1;
+      } else if (newTask && Object.keys(newTask).length > 0) {
+        // Load task data for editing
+        taskId.value = newTask.id;
+        taskValue.value = newTask.task || '';
+        isLoop.value = newTask.isLoop || false;
+        pomodoroCount.value = newTask.pomodoro_count || 0;
+        finishedPomodoo.value = newTask.finish_pomodoro || 0;
+        rangeValue.value = newTask.range || 1;
+      }
+    },
+    {
+      immediate: true,
+      deep: true,
+    }
+  );
+
+  const planStore = usePlanerStore();
 
   function handleMenuClick(e: { key: number; domEvent: Event }) {
     const text = (e.domEvent.target as HTMLElement).textContent;
@@ -55,7 +84,6 @@
     rangeValue.value = 1;
     parentTaskText.value = '选择父任务';
     parentTaskIndex.value = 1;
-    parentTaskList.value = [];
     confirmLoading.value = false;
   }
 
@@ -64,51 +92,6 @@
     let description = type === 'success' ? '任务已经添加到计划中' : '请检查网络连接或者联系管理员';
     return notification[type]({ message, description });
   };
-
-  watch(
-    () => props.task,
-    async newTask => {
-      if (props.operateType === 'insert') {
-        // 新建任务时重置所有字段
-        taskId.value = 0;
-        taskValue.value = '';
-        isLoop.value = false;
-        pomodoroCount.value = 0;
-        finishedPomodoo.value = 0;
-        rangeValue.value = 1;
-        parentTaskText.value = '选择父任务';
-        parentTaskIndex.value = 1;
-      } else if (newTask && Object.keys(newTask).length > 0) {
-        // 编辑任务时加载任务数据
-        taskId.value = newTask.id;
-        taskValue.value = newTask.task || '';
-        isLoop.value = newTask.isLoop || false;
-        pomodoroCount.value = newTask.pomodoro_count || 0;
-        finishedPomodoo.value = newTask.finish_pomodoro || 0;
-        rangeValue.value = newTask.range || 1;
-      }
-
-      switch (planStore.cycleValue) {
-        case 2:
-          parentTaskList.value = await getTaskFromQuarterByMonth(newTask.year, newTask.quarter);
-          break;
-        case 3:
-          parentTaskList.value = await getTaskFromMonthByWeek(newTask.year, newTask.month);
-          break;
-        case 4:
-          parentTaskList.value = await getTaskFromWeekByDay(
-            newTask.year,
-            newTask.month,
-            newTask.week
-          );
-          break;
-      }
-    },
-    {
-      immediate: true,
-      deep: true,
-    }
-  );
 
   async function modalOk() {
     confirmLoading.value = true;
@@ -124,20 +107,21 @@
       } else {
         if (props.operateType === 'insert') {
           try {
+            let addedTask = {};
             switch (planStore.cycleValue) {
               case 1:
-                await insertTaskToQuarter(
+                addedTask = await insertTaskToQuarter(
                   taskValue.value,
                   planStore.year,
                   planStore.quarter,
                   isLoop.value,
                   rangeValue.value
                 );
+                emit('task-added', addedTask);
                 planStore.isQuarterDataChanged = true;
                 break;
-
               case 2:
-                await insertTaskToMonth(
+                addedTask = await insertTaskToMonth(
                   1,
                   planStore.year,
                   planStore.month,
@@ -146,11 +130,12 @@
                   isLoop.value,
                   rangeValue.value
                 );
+                emit('task-added', addedTask);
                 planStore.isMonthDataChanged = true;
                 break;
 
               case 3:
-                await insertTaskToWeek(
+                addedTask = await insertTaskToWeek(
                   1,
                   planStore.year,
                   planStore.month,
@@ -159,11 +144,12 @@
                   isLoop.value,
                   rangeValue.value
                 );
+                emit('task-added', addedTask);
                 planStore.isWeekDataChanged = true;
                 break;
 
               case 4:
-                await insertTaskToDay(
+                addedTask = await insertTaskToDay(
                   parentTaskIndex.value,
                   planStore.year,
                   planStore.month,
@@ -173,6 +159,7 @@
                   pomodoroCount.value,
                   rangeValue.value
                 );
+                emit('task-added', addedTask); // Emit the added task
                 planStore.isDayDataChanged = true;
                 break;
             }
@@ -282,7 +269,7 @@
         <a-dropdown v-if="planStore.cycleValue !== 1">
           <template #overlay>
             <a-menu @click="handleMenuClick">
-              <a-menu-item v-for="(item, index) in parentTaskList" :key="index">
+              <a-menu-item v-for="(item, index) in planStore.parentData" :key="index">
                 <span style="flex: 1">{{ item.task }}</span>
                 <RangeButton
                   :style="{ 'margin-left': 'auto' }"
