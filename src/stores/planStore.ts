@@ -26,7 +26,7 @@ export const usePlanerStore = defineStore('planer', () => {
   const monthData = ref<any[]>([]);
   const weekData = ref<any[]>([]);
   const dayData = ref<any[]>([]);
-  const parentData = ref<any[]>([]); //父任务数据  
+  const parentData = ref<any[]>([]); //父任务数据
 
   // 年份是否发生变化的标志
   const yearChange = ref<boolean>(false);

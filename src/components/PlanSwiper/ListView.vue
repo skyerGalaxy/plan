@@ -15,9 +15,6 @@
     taskData: Task[];
   }>();
 
-  ///////////////test
-  console.log('taskData', props.taskData);
-
   const taskData = ref(props.taskData);
 
   //modal control

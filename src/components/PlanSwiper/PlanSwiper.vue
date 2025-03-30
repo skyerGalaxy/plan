@@ -230,9 +230,9 @@
       case 3:
         return taskData.value.filter((item: any) => item.week === n);
       case 4:
-        return taskData.value.filter((item: any) => dayjs(item.day).format('YYYY-MM-DD') === date);
+        return taskData.value.filter((item: any) => item.day === date);
       default:
-        return [];
+        return taskData.value.filter((item: any) => item.quarter === n);
     }
   });
 </script>

@@ -39,18 +39,12 @@ export const getCurrentDate = async () => {
   const initDaydata = await getTaskFromDay(currentYear, currentMonth, weekInMonth);
   const initQuarterData = await getTaskFromQuarter(currentYear);
   const initMonthData = await getTaskFromMonth(currentYear, currentQuarter);
-  const initWeekData = await getTaskFromWeek(currentYear, currentMonth).then(res => {
-    initParentData = res.filter(item => {
-      item.year = currentYear;
-      item.month = currentMonth;
-      item.week = weekInMonth;
-      return item.isLoop !== true;
-    });
-    return res;
+  const initWeekData = await getTaskFromWeek(currentYear, currentMonth);
+  initParentData = initWeekData.filter(item => {
+    return item.year === currentYear && item.month === currentMonth && item.week === weekInMonth;
   });
 
-  console.log('initweekData', initWeekData);
-  console.log('initParentData', initParentData);
+  console.log('Filtered Parent Data:', initParentData);
 
   const planStore = usePlanerStore();
   planStore.$patch({

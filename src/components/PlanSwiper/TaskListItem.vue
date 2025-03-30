@@ -74,7 +74,7 @@
       <a-list-item-meta>
         <template #title>
           <a-dropdown
-            v-model:visible="dropdownVisible"
+            v-model:open="dropdownVisible"
             :trigger="['contextmenu']"
             :trigger-on-click="false"
             placement="bottomLeft"
@@ -120,7 +120,7 @@
       <a-list-item-meta>
         <template #title>
           <a-dropdown
-            v-model:visible="dropdownVisible"
+            v-model:open="dropdownVisible"
             :trigger="['contextmenu']"
             placement="bottomCenter"
           >
