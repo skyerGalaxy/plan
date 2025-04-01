@@ -23,6 +23,7 @@
   const emit = defineEmits<{
     (e: 'update:visible', value: boolean): void;
     (e: 'task-added', task: any): void;
+    (e: 'task-updated', task: any): void;
   }>();
 
   const taskId = ref<number>(props.task.id);
@@ -58,6 +59,23 @@
         pomodoroCount.value = newTask.pomodoro_count || 0;
         finishedPomodoo.value = newTask.finish_pomodoro || 0;
         rangeValue.value = newTask.range || 1;
+        switch (planStore.cycleValue) {
+          case 2:
+            parentTaskText.value = planStore.parentData.find(
+              (item: any) => item.id === newTask.quarterly_id
+            ).task;
+            break;
+          case 3:
+            parentTaskText.value = planStore.parentData.find(
+              (item: any) => item.id === newTask.monthly_id
+            ).task;
+            break;
+          case 4:
+            parentTaskText.value = planStore.parentData.find(
+              (item: any) => item.id === newTask.weekly_id
+            ).task;
+            break;
+        }
       }
     },
     {
@@ -68,10 +86,9 @@
 
   const planStore = usePlanerStore();
 
-  function handleMenuClick(e: { key: number; domEvent: Event }) {
-    const text = (e.domEvent.target as HTMLElement).textContent;
-    parentTaskText.value = text || '';
-    parentTaskIndex.value = e.key;
+  function handleMenuClick(task: any) {
+    parentTaskText.value = task.task;
+    parentTaskIndex.value = task.id;
   }
 
   function modalCancel() {
@@ -98,7 +115,9 @@
     if (!navigator.onLine) {
       openNotificationWithIcon('error');
     } else {
-      if (!taskValue.value.trim() || pomodoroCount.value === 0) {
+      let incomplete = true;
+      incomplete = !taskValue.value.trim() || (planStore.cycleValue === 4 && !pomodoroCount.value);
+      if (incomplete) {
         notification.warning({
           message: '任务填写不完整',
         });
@@ -122,7 +141,7 @@
                 break;
               case 2:
                 addedTask = await insertTaskToMonth(
-                  1,
+                  parentTaskIndex.value,
                   planStore.year,
                   planStore.month,
                   planStore.quarter,
@@ -136,7 +155,7 @@
 
               case 3:
                 addedTask = await insertTaskToWeek(
-                  1,
+                  parentTaskIndex.value,
                   planStore.year,
                   planStore.month,
                   planStore.weekViewIndex,
@@ -222,7 +241,9 @@
               break;
           }
           try {
-            await updateTask(taskId.value, newTask, tableType || 'DailyPlans');
+            await updateTask(taskId.value, newTask, tableType || 'DailyPlans').then(() => {
+              emit('task-updated', newTask);
+            });
             openNotificationWithIcon('success');
             switch (planStore.cycleValue) {
               case 1:
@@ -268,11 +289,15 @@
         <a-checkbox v-model:checked="isLoop" v-if="planStore.cycleValue !== 4">循环</a-checkbox>
         <a-dropdown v-if="planStore.cycleValue !== 1">
           <template #overlay>
-            <a-menu @click="handleMenuClick">
-              <a-menu-item v-for="(item, index) in planStore.parentData" :key="index">
+            <a-menu :selected-keys="[parentTaskText.toString()]">
+              <a-menu-item
+                v-for="(item, index) in planStore.parentData"
+                @click="handleMenuClick(item)"
+                :key="index"
+              >
                 <span style="flex: 1">{{ item.task }}</span>
                 <RangeButton
-                  :style="{ 'margin-left': 'auto' }"
+                  :style="{ 'margin-left': 'auto', 'pointer-events': 'none' }"
                   :range="item.range"
                   :disable="true"
                 />

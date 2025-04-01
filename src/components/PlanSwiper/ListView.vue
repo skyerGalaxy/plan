@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-  import { ref, onMounted } from 'vue';
+  import { ref } from 'vue';
 
   import addLightImage from '@/assets/add_light.svg';
 
@@ -30,6 +30,13 @@
 
   function handleTaskAdded(newTask: Task): void {
     taskData.value.push(newTask);
+  }
+
+  function handleTaskUpdated(updatedTask: Task): void {
+    const index = taskData.value.findIndex(task => task.id === updatedTask.id);
+    if (index !== -1) {
+      taskData.value[index] = updatedTask;
+    }
   }
 </script>
 
@@ -63,6 +70,7 @@
       :operate-type="operateType"
       :slide-date="slideDate"
       @task-added="handleTaskAdded"
+      @task-updated="handleTaskUpdated"
     />
   </div>
 </template>

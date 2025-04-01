@@ -98,7 +98,12 @@
         }
         break;
       case 2:
-        if (!planStore.yearChange && !quarterChange.value && !planStore.isQuarterDataChanged) {
+        if (
+          !planStore.yearChange &&
+          !quarterChange.value &&
+          !planStore.isQuarterDataChanged &&
+          !planStore.isMonthDataChanged
+        ) {
           taskData.value = monthData.value;
         } else {
           const monthResult = await getTaskFromMonth(planStore.year, planStore.quarter);
@@ -111,7 +116,12 @@
         );
         break;
       case 3:
-        if (!planStore.yearChange && !quarterChange.value && !monthChange.value) {
+        if (
+          !planStore.yearChange &&
+          !quarterChange.value &&
+          !monthChange.value &&
+          !planStore.isWeekDataChanged
+        ) {
           taskData.value = weekData.value;
         } else {
           const result = await getTaskFromWeek(planStore.year, planStore.month);
@@ -128,7 +138,8 @@
           !planStore.yearChange &&
           !quarterChange.value &&
           !monthChange.value &&
-          !weekChange.value
+          !weekChange.value &&
+          !planStore.isDayDataChanged
         ) {
           taskData.value = dayData.value;
         } else {
