@@ -67,7 +67,7 @@
             <RangeButton :range="props.item.range" :disable="true" />
             <PomodoroCounter
               :total-pomodoro="props.item.pomodoro_count"
-              :finished-pomodoo="props.item.finish_pomodoro"
+              :finishedPomodoro="props.item.finish_pomodoro"
               readonly
             />
           </div>

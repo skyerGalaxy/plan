@@ -7,7 +7,7 @@
 
   const props = defineProps<{
     totalPomodoro: number;
-    finishedPomodoo: number;
+    finishedPomodoro: number;
     readonly?: boolean;
   }>();
 
@@ -47,7 +47,7 @@
     >
       <img
         :src="
-          index <= hoverIndex || index <= props.finishedPomodoo
+          index <= hoverIndex || index <= props.finishedPomodoro
             ? ColorTomatoIcon
             : index <= props.totalPomodoro
             ? LightColorTomatoIcon

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-  import { ref } from 'vue';
+  import { ref, onMounted } from 'vue';
 
   import addLightImage from '@/assets/add_light.svg';
 
@@ -21,6 +21,8 @@
   const modalVisible = ref<boolean>(false);
   const currentTask = ref<Task>({});
   const operateType = ref<string>('');
+  const totalTimeConsumed = ref(0);
+  const finishedTimeConsumed = ref(0);
 
   function handleOpenModal(task: Task) {
     operateType.value = 'update';
@@ -30,12 +32,14 @@
 
   function handleTaskAdded(newTask: Task): void {
     taskData.value.push(newTask);
+    computeTaskTimeConsumption();
   }
 
   function handleTaskUpdated(updatedTask: Task): void {
     const index = taskData.value.findIndex(task => task.id === updatedTask.id);
     if (index !== -1) {
       taskData.value.splice(index, 1, updatedTask);
+      computeTaskTimeConsumption();
     }
   }
 
@@ -43,24 +47,62 @@
     const index = taskData.value.findIndex(task => task.id === taskId);
     if (index !== -1) {
       taskData.value.splice(index, 1);
+      computeTaskTimeConsumption();
     }
   }
+
+  function computeTaskTimeConsumption(): void {
+    totalTimeConsumed.value = 0;
+    finishedTimeConsumed.value = 0;
+
+    for (let i = 0; i < taskData.value.length; i++) {
+      const task = taskData.value[i];
+      let singleTaskConsumeTime = 25 * task.pomodoro_count + 5 * (task.pomodoro_count - 1) + 15;
+      totalTimeConsumed.value += singleTaskConsumeTime;
+
+      if (task.isFinished === true) {
+        finishedTimeConsumed.value += singleTaskConsumeTime;
+      }
+    }
+
+    totalTimeConsumed.value = totalTimeConsumed.value / 60;
+    finishedTimeConsumed.value = finishedTimeConsumed.value / 60;
+  }
+
+  onMounted(() => {
+    computeTaskTimeConsumption();
+  });
 </script>
 
 <template>
   <div class="header">
     <div class="date">{{ slideDate }}</div>
-    <div id="components-modal-demo-position">
-      <button
-        @click="
-          operateType = 'insert';
-          currentTask = {};
-          modalVisible = true;
-        "
-        style="background: none; border: none; padding: 0; cursor: pointer"
+    <div class="header-right">
+      <a-tooltip
+        :title="`预计使用时长${totalTimeConsumed.toFixed(
+          2
+        )}小时,已完成${finishedTimeConsumed.toFixed(2)}小时`"
       >
-        <img :src="addLightImage" alt="Add Plan" class="add-icon" />
-      </button>
+        <a-progress
+          :percent="(totalTimeConsumed / 8) * 100"
+          :success="{ percent: (finishedTimeConsumed / 8) * 100 }"
+          type="circle"
+          :size="24"
+          :showInfo="false"
+        />
+      </a-tooltip>
+      <div id="components-modal-demo-position">
+        <button
+          @click="
+            operateType = 'insert';
+            currentTask = {};
+            modalVisible = true;
+          "
+          style="background: none; border: none; padding: 0; cursor: pointer"
+        >
+          <img :src="addLightImage" alt="Add Plan" class="add-icon" />
+        </button>
+      </div>
     </div>
   </div>
   <hr class="divider" />
@@ -85,11 +127,17 @@
 <style scoped>
   .header {
     display: flex;
-    flex-direction: row;
     justify-content: space-between;
+    align-items: center;
     padding: 5px;
     margin: 15px;
     font-size: larger;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
   }
 
   .add-button {
