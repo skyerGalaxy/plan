@@ -179,15 +179,15 @@ export async function getTaskFromDay(year: number, month: number, week: number):
 }
 
 //Unified interface for updating tasks: quarterly, monthly, weekly, daily
-export async function updateTask(id: number, task: object, table: string) {
+export async function updateTask(task: any, table: string) {
   try {
-    await supabase.from(table).update(task).eq('id', id);
+    await supabase.from(table).update(task).eq('id', task.id);
   } catch (error) {
     console.log('error', error);
   }
 }
 
-//defind delete task function
+//define delete task function
 export async function deleteTask(id: number, tableIndex: number) {
   let table: string;
   //define table name according to tableIndex

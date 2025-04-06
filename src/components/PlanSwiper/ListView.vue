@@ -35,7 +35,14 @@
   function handleTaskUpdated(updatedTask: Task): void {
     const index = taskData.value.findIndex(task => task.id === updatedTask.id);
     if (index !== -1) {
-      taskData.value[index] = updatedTask;
+      taskData.value.splice(index, 1, updatedTask);
+    }
+  }
+
+  function handleTaskDeleted(taskId: number): void {
+    const index = taskData.value.findIndex(task => task.id === taskId);
+    if (index !== -1) {
+      taskData.value.splice(index, 1);
     }
   }
 </script>
@@ -60,7 +67,7 @@
   <div class="list-container">
     <a-list item-layout="vertical" :data-source="taskData" class="full-width-list">
       <template #renderItem="{ item }">
-        <TaskListItem :item="item" @open-modal="handleOpenModal" />
+        <TaskListItem :item="item" @open-modal="handleOpenModal" @delete-task="handleTaskDeleted" />
       </template>
     </a-list>
 

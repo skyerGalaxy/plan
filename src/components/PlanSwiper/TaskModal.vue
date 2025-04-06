@@ -61,19 +61,22 @@
         rangeValue.value = newTask.range || 1;
         switch (planStore.cycleValue) {
           case 2:
-            parentTaskText.value = planStore.parentData.find(
+            const quarterlyTask = planStore.parentData.find(
               (item: any) => item.id === newTask.quarterly_id
-            ).task;
+            );
+            parentTaskText.value = quarterlyTask ? quarterlyTask.task : '选择父任务';
             break;
           case 3:
-            parentTaskText.value = planStore.parentData.find(
+            const monthlyTask = planStore.parentData.find(
               (item: any) => item.id === newTask.monthly_id
-            ).task;
+            );
+            parentTaskText.value = monthlyTask ? monthlyTask.task : '选择父任务';
             break;
           case 4:
-            parentTaskText.value = planStore.parentData.find(
+            const weeklyTask = planStore.parentData.find(
               (item: any) => item.id === newTask.weekly_id
-            ).task;
+            );
+            parentTaskText.value = weeklyTask ? weeklyTask.task : '选择父任务';
             break;
         }
       }
@@ -193,6 +196,7 @@
             case 1:
               tableType = 'QuarterlyPlans';
               newTask = {
+                id: taskId.value,
                 task: taskValue.value,
                 year: planStore.year,
                 quarter: planStore.quarter,
@@ -203,7 +207,8 @@
             case 2:
               tableType = 'MonthlyPlans';
               newTask = {
-                quarterly_id: 1,
+                id: taskId.value,
+                quarterly_id: parentTaskIndex.value,
                 year: planStore.year,
                 month: planStore.month,
                 quarter: planStore.quarter,
@@ -215,7 +220,8 @@
             case 3:
               tableType = 'WeeklyPlans';
               newTask = {
-                monthly_id: 1,
+                id: taskId.value,
+                monthly_id: parentTaskIndex.value,
                 year: planStore.year,
                 month: planStore.month,
                 week: planStore.weekViewIndex,
@@ -227,6 +233,7 @@
             case 4:
               tableType = 'DailyPlans';
               newTask = {
+                id: taskId.value,
                 weekly_id: parentTaskIndex.value,
                 year: planStore.year,
                 month: planStore.month,
@@ -241,7 +248,7 @@
               break;
           }
           try {
-            await updateTask(taskId.value, newTask, tableType || 'DailyPlans').then(() => {
+            await updateTask(newTask, tableType || 'DailyPlans').then(() => {
               emit('task-updated', newTask);
             });
             openNotificationWithIcon('success');

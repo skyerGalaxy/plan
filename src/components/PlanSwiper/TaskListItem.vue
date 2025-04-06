@@ -17,10 +17,11 @@
   });
 
   const planStore = usePlanerStore();
-  const emit = defineEmits(['openModal']);
+  const emit = defineEmits(['open-modal', 'delete-task']);
 
   const handleOpenModal = () => {
-    emit('openModal', props.item);
+    console.log('open modal');
+    emit('open-modal', props.item);
   };
 
   const handleMenuClick = async ({ key }: { key: string }) => {
@@ -28,6 +29,7 @@
       case 'delete':
         // 处理删除任务
         await deleteTask(props.item.id, planStore.cycleValue).then(() => {
+          emit('delete-task', props.item.id);
           switch (planStore.cycleValue) {
             case 1:
               planStore.isQuarterDataChanged = true;

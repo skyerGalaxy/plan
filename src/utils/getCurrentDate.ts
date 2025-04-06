@@ -44,8 +44,6 @@ export const getCurrentDate = async () => {
     return item.year === currentYear && item.month === currentMonth && item.week === weekInMonth;
   });
 
-  console.log('Filtered Parent Data:', initParentData);
-
   const planStore = usePlanerStore();
   planStore.$patch({
     year: currentYear,
