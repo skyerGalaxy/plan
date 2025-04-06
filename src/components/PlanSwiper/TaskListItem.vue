@@ -62,8 +62,8 @@
   <template v-if="planStore.cycleValue === 4">
     <a-list-item>
       <template #actions>
-        <div style="margin-left: 50px">
-          <div style="display: flex; align-items: center; gap: 8px">
+        <div class="task-actions">
+          <div class="actions-container">
             <RangeButton :range="props.item.range" :disable="true" />
             <PomodoroCounter
               :total-pomodoro="props.item.pomodoro_count"
@@ -81,7 +81,7 @@
             :trigger-on-click="false"
             placement="bottomLeft"
           >
-            <div @click="handleOpenModal" style="cursor: pointer">
+            <div @click="handleOpenModal" class="task-title">
               <span>{{ props.item.task }}</span>
             </div>
             <template #overlay>
@@ -126,10 +126,7 @@
             :trigger="['contextmenu']"
             placement="bottomCenter"
           >
-            <div
-              @click="handleOpenModal"
-              style="cursor: pointer; display: flex; align-items: center; gap: 8px"
-            >
+            <div @click="handleOpenModal" class="task-content">
               <span style="margin-right: auto">{{ props.item.task }}</span>
               <RangeButton :range="props.item.range" :disable="true" />
             </div>
@@ -155,3 +152,26 @@
     </a-list-item>
   </template>
 </template>
+
+<style scoped>
+  .task-actions {
+    margin-left: 50px;
+  }
+
+  .actions-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .task-title {
+    cursor: pointer;
+  }
+
+  .task-content {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+</style>
