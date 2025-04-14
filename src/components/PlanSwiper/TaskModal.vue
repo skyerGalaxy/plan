@@ -329,6 +329,7 @@
           <PomodoroCounter
             v-model:totalPomodoro="pomodoroCount"
             :finished-pomodoo="finishedPomodoo"
+            :readonly="true"
           />
         </div>
       </div>
