@@ -302,12 +302,21 @@
                 @click="handleMenuClick(item)"
                 :key="index"
               >
-                <span style="flex: 1">{{ item.task }}</span>
-                <RangeButton
-                  :style="{ 'margin-left': 'auto', 'pointer-events': 'none' }"
-                  :range="item.range"
-                  :disable="true"
-                />
+                <div
+                  v-if="item.task.length > 13"
+                  style="display: flex; justify-content: space-between; width: 100%"
+                >
+                  <a-tooltip v-if="item.task.length > 13" :title="item.task">
+                    <span>
+                      {{ item.task.substring(0, 13) + '...' }}
+                    </span>
+                  </a-tooltip>
+                  <RangeButton :range="item.range" :disable="true" />
+                </div>
+                <div v-else style="display: flex; justify-content: space-between; width: 100%">
+                  <span>{{ item.task }}</span>
+                  <RangeButton :range="item.range" :disable="true" />
+                </div>
               </a-menu-item>
             </a-menu>
           </template>
