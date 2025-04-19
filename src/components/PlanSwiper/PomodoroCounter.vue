@@ -8,7 +8,7 @@
   const props = defineProps<{
     totalPomodoro: number;
     finishedPomodoro: number;
-    readonly?: boolean;
+    readonly: boolean;
   }>();
 
   const emit = defineEmits<{

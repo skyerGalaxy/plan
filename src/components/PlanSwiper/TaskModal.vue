@@ -1,7 +1,14 @@
 <script lang="ts" setup>
   import { ref, watch } from 'vue';
   import { notification } from 'ant-design-vue';
-  import { DownOutlined } from '@ant-design/icons-vue';
+  import {
+    DownOutlined,
+    ClockCircleOutlined,
+    BellOutlined,
+    RedoOutlined,
+    RightOutlined,
+  } from '@ant-design/icons-vue';
+  import CircleTimeIcon from '@/assets/circleTime.svg';
   import RangeButton from './RangeButton.vue';
   import PomodoroCounter from './PomodoroCounter.vue';
   import { usePlanerStore } from '@/stores/planStore';
@@ -35,6 +42,9 @@
   const parentTaskText = ref<string>('选择父任务');
   const parentTaskIndex = ref<number>(1);
   const confirmLoading = ref<boolean>(false);
+
+  const isTimeSettingOpen = ref<boolean>(false);
+  const activeTabKey = ref<string>('1');
 
   watch(
     () => props.task,
@@ -276,6 +286,14 @@
       modalCancel();
     }
   }
+
+  function showCircleTimeModal() {
+    isTimeSettingOpen.value = true;
+  }
+
+  function closeCircleTimeModal() {
+    isTimeSettingOpen.value = false;
+  }
 </script>
 
 <template>
@@ -325,15 +343,51 @@
             <DownOutlined :style="{ 'padding-top': '5px' }" />
           </a-button>
         </a-dropdown>
+        <div style="width: 32px; height: 32px">
+          <img :src="CircleTimeIcon" @click="showCircleTimeModal" />
+        </div>
         <div class="rate-container" v-if="planStore.cycleValue == 4">
           <PomodoroCounter
             v-model:totalPomodoro="pomodoroCount"
-            :finished-pomodoo="finishedPomodoo"
-            :readonly="true"
+            :finishedPomodoro="finishedPomodoo"
+            :readonly="false"
           />
         </div>
       </div>
     </div>
+    <a-modal v-model:open="isTimeSettingOpen" :centered="true" @ok="showCircleTimeModal">
+      <a-tabs v-model:activeKey="activeTabKey" :centered="true">
+        <a-tab-pane key="1" tab="时间点">
+          <a-menu
+            mode="vertical"
+            default-selected-keys="['1']"
+            style="display: flex; flex-direction: column"
+          >
+            <a-menu-item key="1" style="display: flex; align-items: center">
+              <span>时间</span>
+              <RightOutlined />
+            </a-menu-item>
+            <a-menu-item key="2" icon="bell">
+              <span>提醒</span>
+              <BellOutlined />
+            </a-menu-item>
+            <a-menu-item key="3" icon="redo">
+              <span>重复</span>
+            </a-menu-item>
+          </a-menu>
+        </a-tab-pane>
+        <a-tab-pane key="2" tab="时间段" force-render>
+          <a-menu mode="vertical" default-selected-keys="['1']">
+            <a-menu-item key="1" icon="clock-circle">
+              <!-- <ClockCircleOutlined /> -->
+              时间
+            </a-menu-item>
+            <a-menu-item key="2" icon="bell">提醒</a-menu-item>
+            <a-menu-item key="3" icon="redo">重复</a-menu-item>
+          </a-menu>
+        </a-tab-pane>
+      </a-tabs>
+    </a-modal>
   </a-modal>
 </template>
 
