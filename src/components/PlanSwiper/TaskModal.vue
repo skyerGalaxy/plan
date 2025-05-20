@@ -1,13 +1,7 @@
 <script lang="ts" setup>
-  import { ref, watch } from 'vue';
+  import { computed, ref, watch } from 'vue';
   import { notification } from 'ant-design-vue';
-  import {
-    DownOutlined,
-    ClockCircleOutlined,
-    BellOutlined,
-    RedoOutlined,
-    RightOutlined,
-  } from '@ant-design/icons-vue';
+  import { DownOutlined, BellOutlined, RedoOutlined, RightOutlined } from '@ant-design/icons-vue';
   import CircleTimeIcon from '@/assets/circleTime.svg';
   import RangeButton from './RangeButton.vue';
   import PomodoroCounter from './PomodoroCounter.vue';
@@ -19,6 +13,13 @@
     insertTaskToMonth,
     updateTask,
   } from '@/utils/supabaseFunction';
+
+  import VueDatePicker from '@vuepic/vue-datepicker';
+  import '@vuepic/vue-datepicker/dist/main.css';
+  import { get } from 'http';
+  import { end } from '@popperjs/core';
+
+  const date = ref();
 
   const props = defineProps<{
     operateType: string; //inser on update,decide modalOk function
@@ -294,6 +295,22 @@
   function closeCircleTimeModal() {
     isTimeSettingOpen.value = false;
   }
+
+  const allowDates = computed(() => {
+    const getDayOfMonth = new Date(props.slideDate).getDate() % 7;
+    const startDate = new Date(props.slideDate);
+    const endDate = new Date(startDate);
+    if (getDayOfMonth !== 0) {
+      endDate.setDate(startDate.getDate() + (7 - getDayOfMonth));
+    }
+    const dates: Date[] = [];
+    let current = new Date(startDate);
+    while (current <= endDate) {
+      dates.push(new Date(current));
+      current.setDate(current.getDate() + 1);
+    }
+    return dates;
+  });
 </script>
 
 <template>
@@ -358,33 +375,24 @@
     <a-modal v-model:open="isTimeSettingOpen" :centered="true" @ok="showCircleTimeModal">
       <a-tabs v-model:activeKey="activeTabKey" :centered="true">
         <a-tab-pane key="1" tab="时间点">
-          <a-menu
-            mode="vertical"
-            default-selected-keys="['1']"
-            style="display: flex; flex-direction: column"
-          >
-            <a-menu-item key="1" style="display: flex; align-items: center">
-              <span>时间</span>
-              <RightOutlined />
-            </a-menu-item>
-            <a-menu-item key="2" icon="bell">
-              <span>提醒</span>
-              <BellOutlined />
-            </a-menu-item>
-            <a-menu-item key="3" icon="redo">
-              <span>重复</span>
-            </a-menu-item>
-          </a-menu>
+          <VueDatePicker
+            v-model="date"
+            inline
+            multi-dates
+            :enable-time-picker="false"
+            style="width: 100%; display: block"
+            :allowed-dates="allowDates"
+          ></VueDatePicker>
         </a-tab-pane>
         <a-tab-pane key="2" tab="时间段" force-render>
-          <a-menu mode="vertical" default-selected-keys="['1']">
-            <a-menu-item key="1" icon="clock-circle">
-              <!-- <ClockCircleOutlined /> -->
-              时间
-            </a-menu-item>
-            <a-menu-item key="2" icon="bell">提醒</a-menu-item>
-            <a-menu-item key="3" icon="redo">重复</a-menu-item>
-          </a-menu>
+          <VueDatePicker
+            v-model="date"
+            inline
+            range
+            :enable-time-picker="false"
+            :allowed-dates="allowDates"
+            style="width: 100%; display: block"
+          ></VueDatePicker>
         </a-tab-pane>
       </a-tabs>
     </a-modal>
