@@ -16,8 +16,6 @@
 
   import VueDatePicker from '@vuepic/vue-datepicker';
   import '@vuepic/vue-datepicker/dist/main.css';
-  import { get } from 'http';
-  import { end } from '@popperjs/core';
 
   const date = ref();
 
@@ -311,6 +309,24 @@
     }
     return dates;
   });
+
+  //for use datePicker instance
+  const singleDatePicker = ref(null);
+  const rangeDatePicker = ref(null);
+
+  function handleDatePickerOk() {
+    // Handle the OK event for the date picker
+    if (activeTabKey.value === '1') {
+      if (singleDatePicker.value) {
+        singleDatePicker.value.selectDate();
+      }
+    } else if (activeTabKey.value === '2') {
+      if (rangeDatePicker.value) {
+        console.log(rangeDatePicker.value);
+      }
+    }
+    closeCircleTimeModal();
+  }
 </script>
 
 <template>
@@ -372,7 +388,12 @@
         </div>
       </div>
     </div>
-    <a-modal v-model:open="isTimeSettingOpen" :centered="true" @ok="showCircleTimeModal">
+    <a-modal
+      v-model:open="isTimeSettingOpen"
+      :centered="true"
+      @ok="handleDatePickerOk"
+      @cancel="closeCircleTimeModal"
+    >
       <a-tabs v-model:activeKey="activeTabKey" :centered="true">
         <a-tab-pane key="1" tab="时间点">
           <VueDatePicker
@@ -381,7 +402,15 @@
             multi-dates
             :enable-time-picker="false"
             style="width: 100%; display: block"
+            disable-month-year-select
             :allowed-dates="allowDates"
+            :action-row="{
+              showSelect: false,
+              showCancel: false,
+              showNow: false,
+              showPreview: false,
+            }"
+            ref="singleDatePicker"
           ></VueDatePicker>
         </a-tab-pane>
         <a-tab-pane key="2" tab="时间段" force-render>
@@ -391,7 +420,15 @@
             range
             :enable-time-picker="false"
             :allowed-dates="allowDates"
+            disable-month-year-select
             style="width: 100%; display: block"
+            :action-row="{
+              showSelect: false,
+              showCancel: false,
+              showNow: false,
+              showPreview: false,
+            }"
+            ref="rangeDatePicker"
           ></VueDatePicker>
         </a-tab-pane>
       </a-tabs>
