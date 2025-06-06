@@ -16,6 +16,7 @@
 
   import VueDatePicker from '@vuepic/vue-datepicker';
   import '@vuepic/vue-datepicker/dist/main.css';
+  import type { DatePickerInstance } from '@vuepic/vue-datepicker';
 
   const date = ref();
 
@@ -128,7 +129,15 @@
       openNotificationWithIcon('error');
     } else {
       let incomplete = true;
-      incomplete = !taskValue.value.trim() || (planStore.cycleValue === 4 && !pomodoroCount.value);
+      incomplete = !taskValue.value.trim() && planStore.cycleValue === 4;
+      console.log(
+        'taskValue.value',
+        taskValue.value,
+        'planStore.cycleValue',
+        planStore.cycleValue,
+        'incomplete',
+        incomplete
+      );
       if (incomplete) {
         notification.warning({
           message: '任务填写不完整',
@@ -311,19 +320,27 @@
   });
 
   //for use datePicker instance
-  const singleDatePicker = ref(null);
-  const rangeDatePicker = ref(null);
+  const singleDatePicker = ref<DatePickerInstance>(null);
+  const rangeDatePicker = ref<DatePickerInstance>(null);
 
   function handleDatePickerOk() {
-    // Handle the OK event for the date picker
-    if (activeTabKey.value === '1') {
-      if (singleDatePicker.value) {
-        singleDatePicker.value.selectDate();
-      }
-    } else if (activeTabKey.value === '2') {
-      if (rangeDatePicker.value) {
-        console.log(rangeDatePicker.value);
-      }
+    switch (activeTabKey.value) {
+      case '1':
+        // Handle single date selection
+        if (singleDatePicker.value) {
+          singleDatePicker.value.selectDate();
+        }
+        break;
+      case '2':
+        // Handle range date selection
+        if (rangeDatePicker.value) {
+          rangeDatePicker.value.selectDate();
+        }
+        break;
+      case '3':
+        // Ebbinghaus cycle, no specific date needed
+        date.value = null;
+        break;
     }
     closeCircleTimeModal();
   }
@@ -396,40 +413,68 @@
     >
       <a-tabs v-model:activeKey="activeTabKey" :centered="true">
         <a-tab-pane key="1" tab="时间点">
-          <VueDatePicker
-            v-model="date"
-            inline
-            multi-dates
-            :enable-time-picker="false"
-            style="width: 100%; display: block"
-            disable-month-year-select
-            :allowed-dates="allowDates"
-            :action-row="{
-              showSelect: false,
-              showCancel: false,
-              showNow: false,
-              showPreview: false,
-            }"
-            ref="singleDatePicker"
-          ></VueDatePicker>
+          <div style="min-height: 370px; display: flex; align-items: center">
+            <VueDatePicker
+              v-model="date"
+              inline
+              multi-dates
+              :enable-time-picker="false"
+              style="width: 100%; display: block"
+              disable-month-year-select
+              :allowed-dates="allowDates"
+              :action-row="{
+                showSelect: false,
+                showCancel: false,
+                showNow: false,
+                showPreview: false,
+              }"
+              ref="singleDatePicker"
+            ></VueDatePicker>
+          </div>
         </a-tab-pane>
         <a-tab-pane key="2" tab="时间段" force-render>
-          <VueDatePicker
-            v-model="date"
-            inline
-            range
-            :enable-time-picker="false"
-            :allowed-dates="allowDates"
-            disable-month-year-select
-            style="width: 100%; display: block"
-            :action-row="{
-              showSelect: false,
-              showCancel: false,
-              showNow: false,
-              showPreview: false,
-            }"
-            ref="rangeDatePicker"
-          ></VueDatePicker>
+          <div style="min-height: 370px; display: flex; align-items: center">
+            <VueDatePicker
+              v-model="date"
+              inline
+              range
+              :enable-time-picker="false"
+              :allowed-dates="allowDates"
+              disable-month-year-select
+              style="width: 100%; display: block"
+              :action-row="{
+                showSelect: false,
+                showCancel: false,
+                showNow: false,
+                showPreview: false,
+              }"
+              ref="rangeDatePicker"
+            ></VueDatePicker>
+          </div>
+        </a-tab-pane>
+        <a-tab-pane key="3" tab="艾宾浩斯">
+          <div
+            style="
+              min-height: 370px;
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+              gap: 10px;
+            "
+          >
+            <div
+              style="
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 100%;
+              "
+            >
+              <p>你已选择艾宾浩斯循环</p>
+              <p>任务将按照艾宾浩斯的时间间隔进行复习</p>
+            </div>
+          </div>
         </a-tab-pane>
       </a-tabs>
     </a-modal>
