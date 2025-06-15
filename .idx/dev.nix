@@ -8,6 +8,7 @@
     "vue.volar"
   ];
   idx.previews = {
+    enable = true;
     previews = {
       web = {
         command = [

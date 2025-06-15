@@ -393,7 +393,7 @@
             <DownOutlined :style="{ 'padding-top': '5px' }" />
           </a-button>
         </a-dropdown>
-        <div style="width: 32px; height: 32px">
+        <div v-if="planStore.cycleValue == 4" style="width: 32px; height: 32px">
           <img :src="CircleTimeIcon" @click="showCircleTimeModal" />
         </div>
         <div class="rate-container" v-if="planStore.cycleValue == 4">
