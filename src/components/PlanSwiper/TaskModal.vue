@@ -1,7 +1,7 @@
 <script lang="ts" setup>
   import { computed, ref, watch } from 'vue';
   import { notification } from 'ant-design-vue';
-  import { DownOutlined, BellOutlined, RedoOutlined, RightOutlined } from '@ant-design/icons-vue';
+  import { DownOutlined } from '@ant-design/icons-vue';
   import CircleTimeIcon from '@/assets/circleTime.svg';
   import RangeButton from './RangeButton.vue';
   import PomodoroCounter from './PomodoroCounter.vue';
@@ -11,6 +11,7 @@
     insertTaskToQuarter,
     insertTaskToWeek,
     insertTaskToMonth,
+    insertLoopTask,
     updateTask,
   } from '@/utils/supabaseFunction';
 
@@ -44,7 +45,7 @@
   const confirmLoading = ref<boolean>(false);
 
   const isTimeSettingOpen = ref<boolean>(false);
-  const activeTabKey = ref<string>('1');
+  const activeTabKey = ref<string>('0');
 
   watch(
     () => props.task,
@@ -115,6 +116,7 @@
     parentTaskText.value = '选择父任务';
     parentTaskIndex.value = 1;
     confirmLoading.value = false;
+    activeTabKey.value = '0'; // Reset to the first tab
   }
 
   const openNotificationWithIcon = (type: 'success' | 'error') => {
@@ -189,16 +191,28 @@
                 break;
 
               case 4:
-                addedTask = await insertTaskToDay(
-                  parentTaskIndex.value,
-                  planStore.year,
-                  planStore.month,
-                  planStore.weekViewIndex,
-                  props.slideDate,
-                  taskValue.value,
-                  pomodoroCount.value,
-                  rangeValue.value
-                );
+                if (activeTabKey.value === '0') {
+                  addedTask = await insertTaskToDay(
+                    parentTaskIndex.value,
+                    planStore.year,
+                    planStore.month,
+                    planStore.weekViewIndex,
+                    props.slideDate,
+                    taskValue.value,
+                    pomodoroCount.value,
+                    rangeValue.value
+                  );
+                } else {
+                  console.log('正在执行循环任务插入');
+                  addedTask = await insertLoopTask(
+                    taskValue.value,
+                    rangeValue.value,
+                    pomodoroCount.value,
+                    '每日循环',
+                    '2025-06-01',
+                    '2025-06-30'
+                  );
+                }
                 emit('task-added', addedTask); // Emit the added task
                 planStore.isDayDataChanged = true;
                 break;
@@ -301,6 +315,8 @@
 
   function closeCircleTimeModal() {
     isTimeSettingOpen.value = false;
+    singleDatePicker.value?.clearValue();
+    rangeDatePicker.value?.clearValue();
   }
 
   const allowDates = computed(() => {
@@ -325,6 +341,10 @@
 
   function handleDatePickerOk() {
     switch (activeTabKey.value) {
+      case '0':
+        // Handle today's date selection
+        date.value = new Date();
+        break;
       case '1':
         // Handle single date selection
         if (singleDatePicker.value) {
@@ -412,6 +432,30 @@
       @cancel="closeCircleTimeModal"
     >
       <a-tabs v-model:activeKey="activeTabKey" :centered="true">
+        <a-tab-pane key="0" tab="今日">
+          <div
+            style="
+              min-height: 370px;
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+              gap: 10px;
+            "
+          >
+            <div
+              style="
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 100%;
+              "
+            >
+              <p>当日任务</p>
+              <p>未选择日期,默认为当日任务</p>
+            </div>
+          </div>
+        </a-tab-pane>
         <a-tab-pane key="1" tab="时间点">
           <div style="min-height: 370px; display: flex; align-items: center">
             <VueDatePicker

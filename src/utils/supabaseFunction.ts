@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { notification } from 'ant-design-vue';
 import exp from 'constants';
+import { title } from 'process';
 
 const supabaseUrl = import.meta.env.VITE_supabaseProjectUrl;
 const supabaseKey = import.meta.env.VITE_anonKey;
@@ -96,19 +97,46 @@ export async function insertTaskToDay(
   range: number = 1
 ) {
   try {
+    console.log('开始执行日任务插入');
     const { data } = await supabase
-      .from('DailyPlans')
+      .from('tasks')
       .insert({
-        weekly_id: weekly_id,
+        title: task,
+        priority: range,
+        pomodoro_count: pomodoro_count,
+        day: day,
         year: year,
         month: month,
         week: week,
-        day: day,
-        task: task,
-        pomodoro_count: pomodoro_count,
-        range: range,
+        weekly_id: weekly_id,
       })
       .select();
+    return data ? data[0] : null;
+    console.log('日任务插入完成');
+  } catch (error) {
+    console.log('Supabase Error:', error);
+  }
+}
+
+////insert loop task to supabase table
+export async function insertLoopTask(
+  taskName: string,
+  priority: number,
+  pomodoro_count: number,
+  recurrence_type: string,
+  start_date: string,
+  end_date: string
+) {
+  console.log('开始执行循环任务插入');
+  try {
+    const { data, error } = await supabase.rpc('insertlooptask', {
+      task_name: taskName,
+      priority: priority,
+      pomodoro_count: pomodoro_count,
+      recurrence_type: recurrence_type,
+      start_date: start_date,
+      end_date: end_date,
+    });
     return data ? data[0] : null;
   } catch (error) {
     console.log('Supabase Error:', error);
