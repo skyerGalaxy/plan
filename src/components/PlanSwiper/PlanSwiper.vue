@@ -16,11 +16,7 @@
     getTaskFromWeek,
     getTaskFromDay,
   } from '@/utils/supabaseFunction';
-  import {
-    getWeekDateRange,
-    countWorkdaysInWeek,
-    getDayTypeInfo,
-  } from '@/utils/holiday';
+  import { getWeekDateRange, countWorkdaysInWeek, getDayTypeInfo } from '@/utils/holiday';
 
   const planStore = usePlanerStore();
   // 用 getSlideCount() 计算初始 slide 数（store.slideCount 存的是当前周的天数，对周视图不适用）
@@ -154,7 +150,10 @@
           resetFlags();
         }
         planStore.parentData = quarterData.value.filter(
-          (item: any) => item.year === planStore.year && item.quarter === planStore.quarter
+          (item: any) =>
+            item.year === planStore.year &&
+            item.quarter === planStore.quarter &&
+            item.isLoop === false
         );
         break;
       case 3:
@@ -172,7 +171,8 @@
           resetFlags();
         }
         planStore.parentData = monthData.value.filter(
-          (item: any) => item.year === planStore.year && item.month === planStore.month
+          (item: any) =>
+            item.year === planStore.year && item.month === planStore.month && item.isLoop === false
         );
         break;
       case 4:
@@ -198,7 +198,8 @@
           (item: any) =>
             item.year === planStore.year &&
             item.month === planStore.month &&
-            item.week === planStore.weekViewIndex
+            item.week === planStore.weekViewIndex &&
+            item.isLoop === false
         );
         break;
     }

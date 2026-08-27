@@ -1,7 +1,7 @@
 <script lang="ts" setup>
   import { computed, ref, watch } from 'vue';
   import { notification } from 'ant-design-vue';
-  import { DownOutlined } from '@ant-design/icons-vue';
+  import { DownOutlined, SyncOutlined } from '@ant-design/icons-vue';
   import CircleTimeIcon from '@/assets/images/circleTime.svg';
   import RangeButton from './RangeButton.vue';
   import PomodoroCounter from './PomodoroCounter.vue';
@@ -381,10 +381,27 @@
         <RangeButton v-model:range="rangeValue" />
       </div>
       <div style="display: flex; justify-content: space-between; margin-bottom: 10px">
-        <a-checkbox v-model:checked="isLoop" v-if="planStore.cycleValue !== 4">循环</a-checkbox>
+        <span
+          v-if="planStore.cycleValue !== 4"
+          @click="isLoop = !isLoop"
+          :style="{
+            display: 'inline-flex',
+            alignItems: 'center',
+            cursor: 'pointer',
+            color: isLoop ? '#1677ff' : 'rgba(0, 0, 0, 0.45)',
+            fontSize: '18px',
+            userSelect: 'none',
+            transition: 'color 0.2s',
+          }"
+        >
+          <SyncOutlined />
+        </span>
         <a-dropdown v-if="planStore.cycleValue !== 1">
           <template #overlay>
-            <a-menu :selected-keys="[parentTaskText.toString()]">
+            <a-menu
+              :selected-keys="[parentTaskText.toString()]"
+              :style="{ maxHeight: '250px', overflowY: 'auto' }"
+            >
               <a-menu-item
                 v-for="(item, index) in planStore.parentData"
                 @click="handleMenuClick(item)"
