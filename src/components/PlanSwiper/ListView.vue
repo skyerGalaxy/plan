@@ -1,7 +1,8 @@
 <script lang="ts" setup>
   import { ref, onMounted } from 'vue';
+  import { CoffeeOutlined, HomeOutlined } from '@ant-design/icons-vue';
 
-  import addLightImage from '@/assets/add_light.svg';
+  import addLightImage from '@/assets/images/add_light.svg';
 
   import TaskModal from './TaskModal.vue';
   import TaskListItem from './TaskListItem.vue';
@@ -13,6 +14,14 @@
   const props = defineProps<{
     slideDate: string;
     taskData: Task[];
+    /** 周视图：日期范围文本，如 "8.1~8.7" */
+    dateRange?: string;
+    /** 周视图：工作日天数 */
+    workdayCount?: number;
+    /** 日视图：工作日/休息日 */
+    dayType?: 'workday' | 'restday';
+    /** 日视图：细分说明（工作日/调休上班/周末/法定节假日） */
+    daySubLabel?: string;
   }>();
 
   const taskData = ref(props.taskData);
@@ -76,7 +85,26 @@
 
 <template>
   <div class="header">
-    <div class="date">{{ slideDate }}</div>
+    <div class="date-area">
+      <div class="date-line">
+        <span class="date">{{ slideDate }}</span>
+        <!-- 日视图：工作日/休息日标识 -->
+        <a-tooltip v-if="dayType" :title="daySubLabel">
+          <span class="day-type-badge" :class="dayType">
+            <CoffeeOutlined v-if="dayType === 'workday'" class="day-type-icon" />
+            <HomeOutlined v-else class="day-type-icon" />
+            <span class="day-type-text">{{ dayType === 'workday' ? '工作日' : '休息日' }}</span>
+          </span>
+        </a-tooltip>
+      </div>
+      <!-- 周视图：日期范围 + 工作日天数 -->
+      <div v-if="dateRange" class="date-sub">
+        <span class="date-range">{{ dateRange }}</span>
+        <span v-if="workdayCount !== undefined" class="workday-count">
+          · {{ workdayCount }} 个工作日
+        </span>
+      </div>
+    </div>
     <div class="header-right">
       <a-tooltip
         :title="`预计使用时长${totalTimeConsumed.toFixed(
@@ -132,6 +160,59 @@
     padding: 5px;
     margin: 15px;
     font-size: larger;
+  }
+
+  .date-area {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-start;
+  }
+
+  .date-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .date-sub {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    color: #888;
+  }
+
+  .workday-count {
+    color: #1677ff;
+    font-weight: 500;
+  }
+
+  .day-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    line-height: 18px;
+    font-weight: 500;
+  }
+
+  .day-type-badge.workday {
+    color: #389e0d;
+    background: #f6ffed;
+    border: 1px solid #b7eb8f;
+  }
+
+  .day-type-badge.restday {
+    color: #cf1322;
+    background: #fff1f0;
+    border: 1px solid #ffa39e;
+  }
+
+  .day-type-icon {
+    font-size: 12px;
   }
 
   .header-right {

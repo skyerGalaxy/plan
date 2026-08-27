@@ -1,7 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import { notification } from 'ant-design-vue';
-import exp from 'constants';
-import { title } from 'process';
 
 const supabaseUrl = import.meta.env.VITE_supabaseProjectUrl;
 const supabaseKey = import.meta.env.VITE_anonKey;

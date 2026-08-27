@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { SeasonPicker} from '@/components/DatePicker/dataPicker';
+import { SeasonPicker} from '@/components/DatePicker/datePicker';
 import PlanSwiper from '@/components/PlanSwiper/PlanSwiper.vue';
-import HideSwitch from '@/components/HideSwitch.vue';
+import HideSwitch from '@/components/common/HideSwitch.vue';
 import { usePlanerStore } from '@/stores/planStore';
 
 const planStore = usePlanerStore();

@@ -3,7 +3,6 @@
   import 'swiper/css';
   import 'swiper/css/effect-coverflow';
   import 'swiper/css/pagination';
-  import './style.css';
   import { EffectCoverflow, Pagination } from 'swiper/modules';
   import dayjs from 'dayjs';
   import ListView from './ListView.vue';
@@ -17,9 +16,15 @@
     getTaskFromWeek,
     getTaskFromDay,
   } from '@/utils/supabaseFunction';
+  import {
+    getWeekDateRange,
+    countWorkdaysInWeek,
+    getDayTypeInfo,
+  } from '@/utils/holiday';
 
   const planStore = usePlanerStore();
-  const slideCount = ref(planStore.slideCount);
+  // 用 getSlideCount() 计算初始 slide 数（store.slideCount 存的是当前周的天数，对周视图不适用）
+  const slideCount = ref(planStore.getSlideCount());
   const activeIndex = ref(planStore.dayActiveIndex);
 
   const key = ref(`${planStore.cycleValue}-${planStore.year}`);
@@ -70,6 +75,43 @@
   });
 
   const monthArray = ref<number[]>([1, 2, 3]);
+
+  // 每个 slide 的附加信息（与 slideDateArray 一一对应）
+  // - 周视图：日期范围 + 工作日天数
+  // - 日视图：工作日/休息日类型
+  interface SlideMeta {
+    dateRange?: string;
+    workdayCount?: number;
+    dayType?: 'workday' | 'restday';
+    daySubLabel?: string;
+  }
+
+  const slideMetaArray = computed<SlideMeta[]>(() => {
+    switch (planStore.cycleValue) {
+      case 3: {
+        return Array.from({ length: slideCount.value }, (_, i): SlideMeta => {
+          const weekIndex = i + 1;
+          const range = getWeekDateRange(planStore.year, planStore.month, weekIndex);
+          const workdayCount = countWorkdaysInWeek(planStore.year, planStore.month, weekIndex);
+          return {
+            dateRange: range.text,
+            workdayCount,
+          };
+        });
+      }
+      case 4: {
+        return Array.from({ length: slideCount.value }, (_, i): SlideMeta => {
+          const info = getDayTypeInfo(slideDateArray.value[i]);
+          return {
+            dayType: info.type,
+            daySubLabel: info.subLabel,
+          };
+        });
+      }
+      default:
+        return [];
+    }
+  });
 
   const isLoading = ref(false);
 
@@ -280,12 +322,36 @@
         v-if="!isLoading"
         :slideDate="slideDateArray[n - 1]"
         :taskData="filteredTaskData(n, slideDateArray[n - 1])"
+        :dateRange="slideMetaArray[n - 1]?.dateRange"
+        :workdayCount="slideMetaArray[n - 1]?.workdayCount"
+        :dayType="slideMetaArray[n - 1]?.dayType"
+        :daySubLabel="slideMetaArray[n - 1]?.daySubLabel"
       />
     </swiper-slide>
   </swiper>
 </template>
 
 <style>
+  .swiper {
+    width: 100%;
+    padding-top: 50px;
+    padding-bottom: 50px;
+  }
+
+  .swiper-slide {
+    background-position: center;
+    background-size: cover;
+    width: 400px;
+    height: 650px;
+    border-radius: 15px;
+    box-shadow: 0 0 20px 5px rgba(173, 216, 230, 0.5);
+  }
+
+  .swiper-slide img {
+    display: block;
+    width: 100%;
+  }
+
   .disabled-area {
     pointer-events: none;
     opacity: 0.5;

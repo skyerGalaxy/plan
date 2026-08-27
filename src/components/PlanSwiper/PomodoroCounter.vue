@@ -1,9 +1,9 @@
 <script lang="ts" setup>
   import { ref } from 'vue';
 
-  import WhiteTomatoIcon from '@/assets/white_clock.svg';
-  import ColorTomatoIcon from '@/assets/red_clock.svg';
-  import LightColorTomatoIcon from '@/assets/light_tomato.svg';
+  import WhiteTomatoIcon from '@/assets/images/white_clock.svg';
+  import ColorTomatoIcon from '@/assets/images/red_clock.svg';
+  import LightColorTomatoIcon from '@/assets/images/light_tomato.svg';
 
   const props = defineProps<{
     totalPomodoro: number;

@@ -45,7 +45,7 @@
 <script setup>
   import { ref, computed, onMounted } from 'vue';
 
-  import ColorTomatoIcon from '@/assets/red_clock.svg';
+  import ColorTomatoIcon from '@/assets/images/red_clock.svg';
 
   const minutes = ref(25);
   const seconds = ref(0);

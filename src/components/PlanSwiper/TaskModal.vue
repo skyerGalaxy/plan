@@ -2,7 +2,7 @@
   import { computed, ref, watch } from 'vue';
   import { notification } from 'ant-design-vue';
   import { DownOutlined } from '@ant-design/icons-vue';
-  import CircleTimeIcon from '@/assets/circleTime.svg';
+  import CircleTimeIcon from '@/assets/images/circleTime.svg';
   import RangeButton from './RangeButton.vue';
   import PomodoroCounter from './PomodoroCounter.vue';
   import { usePlanerStore } from '@/stores/planStore';

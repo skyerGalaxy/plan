@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import planlogeLight from './assets/plan_light.svg';
-import staticLight from './assets/statistics_light.svg';
-import personLight from './assets/profile_light.svg';
+import planlogeLight from './assets/images/plan_light.svg';
+import staticLight from './assets/images/statistics_light.svg';
+import personLight from './assets/images/profile_light.svg';
 
 const selectedKeys = ref<string[]>(['1']);
 const router = useRouter();
@@ -15,7 +15,7 @@ const handleMenuClick = (key: string) => {
       router.push('/');
       break;
     case '2':
-      router.push('/statis');
+      router.push('/statistics');
       break;
     case '3':
       router.push('/person');
@@ -27,7 +27,7 @@ const handleMenuClick = (key: string) => {
 <template>
   <a-layout style="max-height: 80vh;">
     <a-layout-header style="height: 60px; background: #fff; display: flex; align-items: center; padding-left: 20px;">
-      <img alt="logo" style="height: 40px; width: 40px; border-radius: 50%;" src="./assets/logo.png" />
+      <img alt="logo" style="height: 40px; width: 40px; border-radius: 50%;" src="./assets/images/logo.png" />
     </a-layout-header>
     <a-layout-content>
         <a-layout >
@@ -53,23 +53,3 @@ const handleMenuClick = (key: string) => {
       </a-layout-content>
   </a-layout>
 </template>
-
-<style scoped>
-#components-layout-demo-responsive .logo {
-  height: 32px;
-  background: rgba(255, 255, 255, 0.2);
-  margin: 16px;
-}
-
-.site-layout-sub-header-background {
-  background: #fff;
-}
-
-.site-layout-background {
-  background: #fff;
-}
-
-[data-theme='dark'] .site-layout-sub-header-background {
-  background: #141414;
-}
-</style>

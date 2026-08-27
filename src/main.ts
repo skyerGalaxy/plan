@@ -1,4 +1,4 @@
-import './assets/main.css';
+import './assets/styles/main.css';
 
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
@@ -17,6 +17,6 @@ const pinia = createPinia();
 app.use(pinia);
 app.use(router);
 
-await getCurrentDate().then(res => {
+getCurrentDate().then(() => {
   app.use(Antd).mount('#app');
 });

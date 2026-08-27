@@ -1,27 +1,4 @@
 <script setup lang="ts">
-  // import { createClient } from '@supabase/supabase-js'
-  // import { ref, onMounted } from 'vue'
-
-  // const myData = ref<any>([]) // 初始化为空数组，确保数据结构一致
-
-  // const supabaseUrl = import.meta.env.VITE_supabaseProjectUrl
-  // const supabaseKey = import.meta.env.VITE_anonKey
-  // const supabase = createClient(supabaseUrl, supabaseKey)
-
-  // onMounted(async () => {
-  //   try {
-  //     const { data, error } = await supabase.from('QuarterlyPlans').select('*')
-  //     if (error) {
-  //       console.error('Error fetching data:', error)
-  //     } else {
-  //       myData.value = data
-  //       console.log('Fetched data:', myData.value)
-  //     }
-  //   } catch (error) {
-  //     console.error('Unexpected error:', error)
-  //   }
-  // })
-
   import { usePlanerStore } from '@/stores/planStore';
   const planStore = usePlanerStore();
 </script>

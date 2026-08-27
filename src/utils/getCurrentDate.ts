@@ -7,7 +7,6 @@ import {
   getTaskFromMonth,
   getTaskFromWeek,
 } from './supabaseFunction';
-import { an } from 'vitest/dist/chunks/reporters.D7Jzd9GS';
 
 dayjs.extend(quarterOfYear);
 

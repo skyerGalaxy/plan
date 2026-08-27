@@ -6,7 +6,7 @@ import type { MenuProps } from 'ant-design-vue';
 
 const handleMenuClick: MenuProps['onClick'] = e => {
   console.log('click', e);
-  selectedKeys.value = [e.key];
+  selectedKeys.value = [String(e.key)];
 };
 
 const selectedKeys = ref<string[]>([]);
