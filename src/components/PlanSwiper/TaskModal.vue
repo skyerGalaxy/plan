@@ -1,8 +1,7 @@
 <script lang="ts" setup>
-  import { computed, ref, watch } from 'vue';
+  import { ref, watch } from 'vue';
   import { notification } from 'ant-design-vue';
   import { DownOutlined, SyncOutlined } from '@ant-design/icons-vue';
-  import CircleTimeIcon from '@/assets/images/circleTime.svg';
   import RangeButton from './RangeButton.vue';
   import PomodoroCounter from './PomodoroCounter.vue';
   import { usePlanerStore } from '@/stores/planStore';
@@ -14,12 +13,6 @@
     insertLoopTask,
     updateTask,
   } from '@/utils/supabaseFunction';
-
-  import VueDatePicker from '@vuepic/vue-datepicker';
-  import '@vuepic/vue-datepicker/dist/main.css';
-  import type { DatePickerInstance } from '@vuepic/vue-datepicker';
-
-  const date = ref();
 
   const props = defineProps<{
     operateType: string; //inser on update,decide modalOk function
@@ -43,9 +36,6 @@
   const parentTaskText = ref<string>('选择父任务');
   const parentTaskIndex = ref<number>(1);
   const confirmLoading = ref<boolean>(false);
-
-  const isTimeSettingOpen = ref<boolean>(false);
-  const activeTabKey = ref<string>('0');
 
   watch(
     () => props.task,
@@ -116,7 +106,6 @@
     parentTaskText.value = '选择父任务';
     parentTaskIndex.value = 1;
     confirmLoading.value = false;
-    activeTabKey.value = '0'; // Reset to the first tab
   }
 
   const openNotificationWithIcon = (type: 'success' | 'error') => {
@@ -129,240 +118,197 @@
     confirmLoading.value = true;
     if (!navigator.onLine) {
       openNotificationWithIcon('error');
+      confirmLoading.value = false;
+      return;
     } else {
       let incomplete = true;
-      incomplete = !taskValue.value.trim() && planStore.cycleValue === 4;
-      console.log(
-        'taskValue.value',
-        taskValue.value,
-        'planStore.cycleValue',
-        planStore.cycleValue,
-        'incomplete',
-        incomplete
-      );
+      if (planStore.cycleValue === 1) {
+        incomplete = !taskValue.value.trim();
+      } else {
+        incomplete = !parentTaskText.value || pomodoroCount.value === 0;
+      }
       if (incomplete) {
         notification.warning({
           message: '任务填写不完整',
         });
         confirmLoading.value = false;
         modalCancel();
-      } else {
-        if (props.operateType === 'insert') {
-          try {
-            let addedTask = {};
-            switch (planStore.cycleValue) {
-              case 1:
-                addedTask = await insertTaskToQuarter(
-                  taskValue.value,
-                  planStore.year,
-                  planStore.quarter,
-                  isLoop.value,
-                  rangeValue.value
-                );
-                emit('task-added', addedTask);
-                planStore.isQuarterDataChanged = true;
-                break;
-              case 2:
-                addedTask = await insertTaskToMonth(
-                  parentTaskIndex.value,
-                  planStore.year,
-                  planStore.month,
-                  planStore.quarter,
-                  taskValue.value,
-                  isLoop.value,
-                  rangeValue.value
-                );
-                emit('task-added', addedTask);
-                planStore.isMonthDataChanged = true;
-                break;
+        return;
+      }
 
-              case 3:
-                addedTask = await insertTaskToWeek(
+      // 月/周/日任务的非循环场景必须指定父任务；循环的月/周任务可无父任务创建
+      const parentUnselected = parentTaskText.value === '选择父任务';
+      const parentRequired =
+        planStore.cycleValue !== 1 && planStore.cycleValue !== undefined && !isLoop.value;
+      if (parentRequired && parentUnselected) {
+        notification.warning({
+          message: '请选择父任务',
+          description: '未指定父任务，任务无法创建',
+        });
+        confirmLoading.value = false;
+        return;
+      }
+
+      if (props.operateType === 'insert') {
+        try {
+          let addedTask = {};
+          switch (planStore.cycleValue) {
+            case 1:
+              addedTask = await insertTaskToQuarter(
+                taskValue.value,
+                planStore.year,
+                planStore.quarter,
+                isLoop.value,
+                rangeValue.value
+              );
+              emit('task-added', addedTask);
+              planStore.isQuarterDataChanged = true;
+              break;
+            case 2:
+              addedTask = await insertTaskToMonth(
+                parentTaskIndex.value,
+                planStore.year,
+                planStore.month,
+                planStore.quarter,
+                taskValue.value,
+                isLoop.value,
+                rangeValue.value
+              );
+              emit('task-added', addedTask);
+              planStore.isMonthDataChanged = true;
+              break;
+
+            case 3:
+              addedTask = await insertTaskToWeek(
+                parentTaskIndex.value,
+                planStore.year,
+                planStore.month,
+                planStore.weekViewIndex,
+                taskValue.value,
+                isLoop.value,
+                rangeValue.value
+              );
+              emit('task-added', addedTask);
+              planStore.isWeekDataChanged = true;
+              break;
+
+            case 4:
+              if (!isLoop.value) {
+                addedTask = await insertTaskToDay(
                   parentTaskIndex.value,
                   planStore.year,
                   planStore.month,
                   planStore.weekViewIndex,
+                  props.slideDate,
                   taskValue.value,
-                  isLoop.value,
+                  pomodoroCount.value,
                   rangeValue.value
                 );
-                emit('task-added', addedTask);
-                planStore.isWeekDataChanged = true;
-                break;
-
-              case 4:
-                if (activeTabKey.value === '0') {
-                  addedTask = await insertTaskToDay(
-                    parentTaskIndex.value,
-                    planStore.year,
-                    planStore.month,
-                    planStore.weekViewIndex,
-                    props.slideDate,
-                    taskValue.value,
-                    pomodoroCount.value,
-                    rangeValue.value
-                  );
-                } else {
-                  console.log('正在执行循环任务插入');
-                  addedTask = await insertLoopTask(
-                    taskValue.value,
-                    rangeValue.value,
-                    pomodoroCount.value,
-                    '每日循环',
-                    '2025-06-01',
-                    '2025-06-30'
-                  );
-                }
-                emit('task-added', addedTask); // Emit the added task
-                planStore.isDayDataChanged = true;
-                break;
-            }
-            openNotificationWithIcon('success');
-          } catch (error) {
-            openNotificationWithIcon('error');
+              } else {
+                console.log('正在执行循环任务插入');
+                addedTask = await insertLoopTask(
+                  taskValue.value,
+                  rangeValue.value,
+                  pomodoroCount.value,
+                  '每日循环',
+                  '2025-06-01',
+                  '2025-06-30'
+                );
+              }
+              emit('task-added', addedTask); // Emit the added task
+              planStore.isDayDataChanged = true;
+              break;
           }
-        } else if (props.operateType === 'update') {
-          let tableType;
-          let newTask = {};
+          openNotificationWithIcon('success');
+        } catch (error) {
+          openNotificationWithIcon('error');
+        }
+      } else if (props.operateType === 'update') {
+        let tableType;
+        let newTask = {};
+        switch (planStore.cycleValue) {
+          case 1:
+            tableType = 'QuarterlyPlans';
+            newTask = {
+              id: taskId.value,
+              task: taskValue.value,
+              year: planStore.year,
+              quarter: planStore.quarter,
+              range: rangeValue.value,
+              isLoop: isLoop.value,
+            };
+            break;
+          case 2:
+            tableType = 'MonthlyPlans';
+            newTask = {
+              id: taskId.value,
+              quarterly_id: parentTaskIndex.value,
+              year: planStore.year,
+              month: planStore.month,
+              quarter: planStore.quarter,
+              task: taskValue.value,
+              range: rangeValue.value,
+              isLoop: isLoop.value,
+            };
+            break;
+          case 3:
+            tableType = 'WeeklyPlans';
+            newTask = {
+              id: taskId.value,
+              monthly_id: parentTaskIndex.value,
+              year: planStore.year,
+              month: planStore.month,
+              week: planStore.weekViewIndex,
+              task: taskValue.value,
+              range: rangeValue.value,
+              isLoop: isLoop.value,
+            };
+            break;
+          case 4:
+            tableType = 'DailyPlans';
+            newTask = {
+              id: taskId.value,
+              weekly_id: parentTaskIndex.value,
+              year: planStore.year,
+              month: planStore.month,
+              week: planStore.weekViewIndex,
+              day: props.slideDate,
+              task: taskValue.value,
+              pomodoro_count: pomodoroCount.value,
+              range: rangeValue.value,
+              finish_pomodoro: 0,
+              isFinished: false,
+            };
+            break;
+        }
+        try {
+          await updateTask(newTask, tableType || 'DailyPlans').then(() => {
+            emit('task-updated', newTask);
+          });
+          openNotificationWithIcon('success');
           switch (planStore.cycleValue) {
             case 1:
-              tableType = 'QuarterlyPlans';
-              newTask = {
-                id: taskId.value,
-                task: taskValue.value,
-                year: planStore.year,
-                quarter: planStore.quarter,
-                range: rangeValue.value,
-                isLoop: isLoop.value,
-              };
+              planStore.isQuarterDataChanged = true;
               break;
             case 2:
-              tableType = 'MonthlyPlans';
-              newTask = {
-                id: taskId.value,
-                quarterly_id: parentTaskIndex.value,
-                year: planStore.year,
-                month: planStore.month,
-                quarter: planStore.quarter,
-                task: taskValue.value,
-                range: rangeValue.value,
-                isLoop: isLoop.value,
-              };
+              planStore.isMonthDataChanged = true;
               break;
             case 3:
-              tableType = 'WeeklyPlans';
-              newTask = {
-                id: taskId.value,
-                monthly_id: parentTaskIndex.value,
-                year: planStore.year,
-                month: planStore.month,
-                week: planStore.weekViewIndex,
-                task: taskValue.value,
-                range: rangeValue.value,
-                isLoop: isLoop.value,
-              };
+              planStore.isWeekDataChanged = true;
               break;
             case 4:
-              tableType = 'DailyPlans';
-              newTask = {
-                id: taskId.value,
-                weekly_id: parentTaskIndex.value,
-                year: planStore.year,
-                month: planStore.month,
-                week: planStore.weekViewIndex,
-                day: props.slideDate,
-                task: taskValue.value,
-                pomodoro_count: pomodoroCount.value,
-                range: rangeValue.value,
-                finish_pomodoro: 0,
-                isFinished: false,
-              };
+              planStore.isDayDataChanged = true;
               break;
           }
-          try {
-            await updateTask(newTask, tableType || 'DailyPlans').then(() => {
-              emit('task-updated', newTask);
-            });
-            openNotificationWithIcon('success');
-            switch (planStore.cycleValue) {
-              case 1:
-                planStore.isQuarterDataChanged = true;
-                break;
-              case 2:
-                planStore.isMonthDataChanged = true;
-                break;
-              case 3:
-                planStore.isWeekDataChanged = true;
-                break;
-              case 4:
-                planStore.isDayDataChanged = true;
-                break;
-            }
-          } catch (error) {
-            openNotificationWithIcon('error');
-          }
+        } catch (error) {
+          openNotificationWithIcon('error');
         }
       }
+
       // 重置表单
       confirmLoading.value = false;
       modalCancel();
     }
-  }
-
-  function showCircleTimeModal() {
-    isTimeSettingOpen.value = true;
-  }
-
-  function closeCircleTimeModal() {
-    isTimeSettingOpen.value = false;
-    singleDatePicker.value?.clearValue();
-    rangeDatePicker.value?.clearValue();
-  }
-
-  const allowDates = computed(() => {
-    const getDayOfMonth = new Date(props.slideDate).getDate() % 7;
-    const startDate = new Date(props.slideDate);
-    const endDate = new Date(startDate);
-    if (getDayOfMonth !== 0) {
-      endDate.setDate(startDate.getDate() + (7 - getDayOfMonth));
-    }
-    const dates: Date[] = [];
-    let current = new Date(startDate);
-    while (current <= endDate) {
-      dates.push(new Date(current));
-      current.setDate(current.getDate() + 1);
-    }
-    return dates;
-  });
-
-  //for use datePicker instance
-  const singleDatePicker = ref<DatePickerInstance>(null);
-  const rangeDatePicker = ref<DatePickerInstance>(null);
-
-  function handleDatePickerOk() {
-    switch (activeTabKey.value) {
-      case '0':
-        // Handle today's date selection
-        date.value = new Date();
-        break;
-      case '1':
-        // Handle single date selection
-        if (singleDatePicker.value) {
-          singleDatePicker.value.selectDate();
-        }
-        break;
-      case '2':
-        // Handle range date selection
-        if (rangeDatePicker.value) {
-          rangeDatePicker.value.selectDate();
-        }
-        break;
-      case '3':
-        // Ebbinghaus cycle, no specific date needed
-        date.value = null;
-        break;
-    }
-    closeCircleTimeModal();
   }
 </script>
 
@@ -430,9 +376,6 @@
             <DownOutlined :style="{ 'padding-top': '5px' }" />
           </a-button>
         </a-dropdown>
-        <div v-if="planStore.cycleValue == 4" style="width: 32px; height: 32px">
-          <img :src="CircleTimeIcon" @click="showCircleTimeModal" />
-        </div>
         <div class="rate-container" v-if="planStore.cycleValue == 4">
           <PomodoroCounter
             v-model:totalPomodoro="pomodoroCount"
@@ -442,103 +385,6 @@
         </div>
       </div>
     </div>
-    <a-modal
-      v-model:open="isTimeSettingOpen"
-      :centered="true"
-      @ok="handleDatePickerOk"
-      @cancel="closeCircleTimeModal"
-    >
-      <a-tabs v-model:activeKey="activeTabKey" :centered="true">
-        <a-tab-pane key="0" tab="今日">
-          <div
-            style="
-              min-height: 370px;
-              display: flex;
-              flex-direction: column;
-              justify-content: center;
-              gap: 10px;
-            "
-          >
-            <div
-              style="
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                height: 100%;
-              "
-            >
-              <p>当日任务</p>
-              <p>未选择日期,默认为当日任务</p>
-            </div>
-          </div>
-        </a-tab-pane>
-        <a-tab-pane key="1" tab="时间点">
-          <div style="min-height: 370px; display: flex; align-items: center">
-            <VueDatePicker
-              v-model="date"
-              inline
-              multi-dates
-              :enable-time-picker="false"
-              style="width: 100%; display: block"
-              disable-month-year-select
-              :allowed-dates="allowDates"
-              :action-row="{
-                showSelect: false,
-                showCancel: false,
-                showNow: false,
-                showPreview: false,
-              }"
-              ref="singleDatePicker"
-            ></VueDatePicker>
-          </div>
-        </a-tab-pane>
-        <a-tab-pane key="2" tab="时间段" force-render>
-          <div style="min-height: 370px; display: flex; align-items: center">
-            <VueDatePicker
-              v-model="date"
-              inline
-              range
-              :enable-time-picker="false"
-              :allowed-dates="allowDates"
-              disable-month-year-select
-              style="width: 100%; display: block"
-              :action-row="{
-                showSelect: false,
-                showCancel: false,
-                showNow: false,
-                showPreview: false,
-              }"
-              ref="rangeDatePicker"
-            ></VueDatePicker>
-          </div>
-        </a-tab-pane>
-        <a-tab-pane key="3" tab="艾宾浩斯">
-          <div
-            style="
-              min-height: 370px;
-              display: flex;
-              flex-direction: column;
-              justify-content: center;
-              gap: 10px;
-            "
-          >
-            <div
-              style="
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                height: 100%;
-              "
-            >
-              <p>你已选择艾宾浩斯循环</p>
-              <p>任务将按照艾宾浩斯的时间间隔进行复习</p>
-            </div>
-          </div>
-        </a-tab-pane>
-      </a-tabs>
-    </a-modal>
   </a-modal>
 </template>
 
