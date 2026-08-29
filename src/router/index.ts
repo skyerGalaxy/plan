@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import PlanView from '@/views/PlanView.vue';
 import PersonView from '@/views/PersonView.vue';
 import StatisticsView from '@/views/StatisticsView.vue';
+import SettingsView from '@/views/SettingsView.vue';
 import PomodoroTimer from '@/components/PlanSwiper/PomodoroTimer.vue';
 
 const routes = [
@@ -19,6 +20,11 @@ const routes = [
     path: '/statistics',
     name: 'Statistics',
     component: StatisticsView,
+  },
+  {
+    path: '/settings',
+    name: 'Settings',
+    component: SettingsView,
   },
   {
     path: '/pomodoro/:id/:taskName/:totalPomodoros',

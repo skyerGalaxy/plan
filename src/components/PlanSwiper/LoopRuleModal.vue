@@ -89,33 +89,51 @@
     }
   }
 
-  // 根据已有规则回显表单
+  // 根据规则回显表单（保留历史状态，供取消时恢复）
+  function applyRule(rule: string | null) {
+    if (!rule) {
+      selectedType.value = 'none';
+      weeklyDays.value = [1];
+      monthlyDays.value = [1];
+      return;
+    }
+    try {
+      const parsed = JSON.parse(rule);
+      const t = parsed?.type as SelectionType;
+      if (t && selectableTypes.value.includes(t)) {
+        selectedType.value = t;
+      } else {
+        selectedType.value = 'none';
+      }
+      if (t === 'cycle_weekly_days' && Array.isArray(parsed.days)) {
+        weeklyDays.value = parsed.days.filter((d: number) => d >= 1 && d <= 7);
+      } else {
+        weeklyDays.value = [1];
+      }
+      if (t === 'cycle_monthly_days' && Array.isArray(parsed.days)) {
+        monthlyDays.value = parsed.days.filter((d: number) => d >= 1 && d <= 31);
+      } else {
+        monthlyDays.value = [1];
+      }
+    } catch {
+      selectedType.value = 'none';
+      weeklyDays.value = [1];
+      monthlyDays.value = [1];
+    }
+  }
+
   watch(
     () => props.rule,
-    rule => {
-      if (!rule) {
-        selectedType.value = 'none';
-        return;
-      }
-      try {
-        const parsed = JSON.parse(rule);
-        const t = parsed?.type as SelectionType;
-        if (t && selectableTypes.value.includes(t)) {
-          selectedType.value = t;
-        } else {
-          selectedType.value = 'none';
-        }
-        if (t === 'cycle_weekly_days' && Array.isArray(parsed.days)) {
-          weeklyDays.value = parsed.days.filter((d: number) => d >= 1 && d <= 7);
-        }
-        if (t === 'cycle_monthly_days' && Array.isArray(parsed.days)) {
-          monthlyDays.value = parsed.days.filter((d: number) => d >= 1 && d <= 31);
-        }
-      } catch {
-        selectedType.value = 'none';
-      }
-    },
+    rule => applyRule(rule),
     { immediate: true }
+  );
+
+  // 每次打开弹窗时，重置为该任务已保存的循环规则
+  watch(
+    () => props.open,
+    open => {
+      if (open) applyRule(props.rule);
+    }
   );
 
   // 粒度切换后，原选中类型不再允许时重置为不循环
@@ -207,15 +225,22 @@
   });
 
   // ---- 下次触发日期计算（从开始日的次日起算） ----
+  // 所有推算函数都加了 isValid 校验与最大步数护栏，避免无效日期导致死循环
+  const MAX_STEPS = 10000;
+
   function nextDaily(start: string, count: number): string[] {
     const s = dayjs(start);
+    if (!s.isValid()) return [];
     return Array.from({ length: count }, (_, i) => s.add(i + 1, 'day').format('MM/DD'));
   }
 
   function nextWorkday(start: string, count: number): string[] {
     const res: string[] = [];
-    let day = dayjs(start);
-    while (res.length < count) {
+    const base = dayjs(start);
+    if (!base.isValid()) return [];
+    let day = base;
+    let guard = 0;
+    while (res.length < count && guard++ < MAX_STEPS) {
       day = day.add(1, 'day');
       const w = day.day();
       if (w >= 1 && w <= 5) res.push(day.format('MM/DD'));
@@ -225,8 +250,11 @@
 
   function nextWeekend(start: string, count: number): string[] {
     const res: string[] = [];
-    let day = dayjs(start);
-    while (res.length < count) {
+    const base = dayjs(start);
+    if (!base.isValid()) return [];
+    let day = base;
+    let guard = 0;
+    while (res.length < count && guard++ < MAX_STEPS) {
       day = day.add(1, 'day');
       const w = day.day();
       if (w === 0 || w === 6) res.push(day.format('MM/DD'));
@@ -237,9 +265,12 @@
   function nextWeeklyDays(start: string, days: number[], count: number): string[] {
     if (!days.length) return [];
     const res: string[] = [];
+    const base = dayjs(start);
+    if (!base.isValid()) return [];
     const set = new Set(days.map(d => d % 7)); // 周一=1..周六=6、周日=0
-    let day = dayjs(start);
-    while (res.length < count) {
+    let day = base;
+    let guard = 0;
+    while (res.length < count && guard++ < MAX_STEPS) {
       day = day.add(1, 'day');
       if (set.has(day.day())) res.push(day.format('MM/DD'));
     }
@@ -249,13 +280,16 @@
   function nextMonthlyDays(start: string, days: number[], count: number): string[] {
     if (!days.length) return [];
     const res: string[] = [];
-    let cursor = dayjs(start).add(1, 'month').date(1);
-    while (res.length < count) {
+    const base = dayjs(start);
+    if (!base.isValid()) return [];
+    let cursor = base.add(1, 'month').date(1);
+    let guard = 0;
+    while (res.length < count && guard++ < MAX_STEPS) {
       const dim = cursor.daysInMonth();
       for (const d of [...days].sort((a, b) => a - b)) {
         if (d > dim) continue;
         const dt = cursor.date(d);
-        if (dt.isAfter(dayjs(start)) && res.length < count) res.push(dt.format('MM/DD'));
+        if (dt.isAfter(base) && res.length < count) res.push(dt.format('MM/DD'));
       }
       cursor = cursor.add(1, 'month');
     }
@@ -277,6 +311,8 @@
   }
 
   function handleCancel() {
+    // 取消时不保存，恢复到已保存的循环规则
+    applyRule(props.rule);
     emit('update:open', false);
   }
 
@@ -288,7 +324,7 @@
     :open="open"
     :centered="true"
     :width="420"
-    title="设置循环规则"
+    title="循环规则"
     ok-text="确定"
     cancel-text="取消"
     @update:open="(val: boolean) => emit('update:open', val)"
@@ -360,14 +396,6 @@
           </button>
         </div>
       </div>
-    </div>
-
-    <!-- 预览区 -->
-    <div class="preview-area">
-      <p class="preview-text">{{ preview.text }}</p>
-      <p v-if="preview.nextDates.length" class="preview-dates">
-        下次：{{ preview.nextDates.join('、') }}
-      </p>
     </div>
   </a-modal>
 </template>

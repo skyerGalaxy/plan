@@ -4,7 +4,7 @@
 </script>
 
 <template>
-  <a-layout style="height: 90vh; display: flex; flex-direction: column;">
+  <a-layout style="height: 100%; min-height: 0; display: flex; flex-direction: column;">
     <a-layout-content style="flex: 1; overflow: hidden; display: flex; flex-direction: column;">
         <div v-if="planStore.dayData.length > 0">
           <h1>Fetched Data:</h1>

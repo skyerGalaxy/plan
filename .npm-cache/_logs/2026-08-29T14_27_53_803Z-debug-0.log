@@ -1,0 +1,18 @@
+0 verbose cli D:\Nodejs\node.exe D:\Nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@10.9.0
+2 info using node@v22.12.0
+3 silly config load:file:D:\Nodejs\node_modules\npm\npmrc
+4 silly config load:file:E:\code\Vue\plan\.npmrc
+5 silly config load:file:C:\Users\Xinghe Wu\.npmrc
+6 silly config load:file:D:\Softwares\NodeGlobal\node_global\etc\npmrc
+7 verbose title npm exec vue-tsc --build --force
+8 verbose argv "exec" "--" "vue-tsc" "--build" "--force"
+9 verbose logfile logs-max:10 dir:e:\code\Vue\plan\.npm-cache\_logs\2026-08-29T14_27_53_803Z-
+10 verbose logfile e:\code\Vue\plan\.npm-cache\_logs\2026-08-29T14_27_53_803Z-debug-0.log
+11 silly logfile done cleaning log files
+12 verbose cwd E:\code\Vue\plan
+13 verbose os Windows_NT 10.0.26200
+14 verbose node v22.12.0
+15 verbose npm  v10.9.0
+16 verbose exit 1
+17 verbose code 1

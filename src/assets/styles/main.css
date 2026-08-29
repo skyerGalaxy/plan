@@ -1,3 +1,18 @@
+/* 全局滚动根约束：页面整体不滚动，滚动只允许出现在明确指定的内部容器 */
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* 覆盖 antd .ant-layout 默认的 min-height: 100vh，避免嵌套布局撑破视口 */
+.ant-layout {
+  min-height: 0;
+}
+
 /* @import './base.css';
 
 #app {

@@ -11,11 +11,15 @@
   const modules = [EffectCoverflow, Pagination];
 
   import {
-    getTaskFromQuarter,
-    getTaskFromMonth,
-    getTaskFromWeek,
-    getTaskFromDay,
-  } from '@/utils/supabaseFunction';
+    getRepository,
+    withFinishedCounts,
+    quarterRange,
+    monthRange,
+    weekRange,
+    dayRange,
+    overlapsRange,
+    type Task,
+  } from '@/api';
   import { getWeekDateRange, countWorkdaysInWeek, getDayTypeInfo } from '@/utils/holiday';
 
   const planStore = usePlanerStore();
@@ -31,14 +35,41 @@
   const weekData = ref<any[]>(planStore.weekData);
   const dayData = ref<any[]>(planStore.dayData);
 
-  const paretTask = ref<any[]>(
-    planStore.weekData.filter(
-      (item: any) =>
-        item.year === planStore.year &&
-        item.month === planStore.month &&
-        item.week === planStore.weekViewIndex
-    )
-  );
+  const repo = getRepository();
+
+  // 当前滑块上下文对应的日期范围（随 store 状态响应式变化）
+  function currentSlideRange() {
+    switch (planStore.cycleValue) {
+      case 2:
+        return quarterRange(planStore.year, planStore.quarter);
+      case 3:
+        return monthRange(planStore.year, planStore.month);
+      case 4:
+        return weekRange(planStore.year, planStore.month, planStore.weekViewIndex);
+      default:
+        return quarterRange(planStore.year, planStore.quarter);
+    }
+  }
+
+  // 父任务候选：上一级粒度任务中与当前滑块区间有交集的非循环任务
+  const parentData = computed<Task[]>(() => {
+    const range = currentSlideRange();
+    switch (planStore.cycleValue) {
+      case 2:
+        return quarterData.value.filter(t => !t.is_cyclic && overlapsRange(t, range));
+      case 3:
+        return monthData.value.filter(t => !t.is_cyclic && overlapsRange(t, range));
+      case 4:
+        return weekData.value.filter(t => !t.is_cyclic && overlapsRange(t, range));
+      default:
+        return [];
+    }
+  });
+
+  // 同步到 store，供 TaskModal 等子组件读取
+  watchEffect(() => {
+    planStore.parentData = parentData.value;
+  });
 
   const quarterChange = ref(false);
   const monthChange = ref(false);
@@ -125,83 +156,102 @@
   async function handleCycleValueChange() {
     isLoading.value = true;
     switch (planStore.cycleValue) {
-      case 1:
+      case 1: {
         if (!planStore.yearChange) {
           taskData.value = quarterData.value;
         } else {
-          const quarterResult = await getTaskFromQuarter(planStore.year);
+          const quarterResult = await repo.listTasks({
+            periodType: 1,
+            overlapStart: `${planStore.year}-01-01`,
+            overlapEnd: `${planStore.year}-12-31`,
+          });
           taskData.value = quarterResult;
           quarterData.value = quarterResult;
           resetFlags();
         }
         break;
-      case 2:
-        if (
-          !planStore.yearChange &&
-          !quarterChange.value &&
-          !planStore.isQuarterDataChanged &&
-          !planStore.isMonthDataChanged
-        ) {
+      }
+      case 2: {
+        const needReload =
+          planStore.yearChange ||
+          quarterChange.value ||
+          planStore.isQuarterDataChanged ||
+          planStore.isMonthDataChanged;
+        if (!needReload) {
           taskData.value = monthData.value;
         } else {
-          const monthResult = await getTaskFromMonth(planStore.year, planStore.quarter);
+          const monthResult = await repo.listTasks({
+            periodType: 2,
+            ...quarterRange(planStore.year, planStore.quarter),
+          });
           taskData.value = monthResult;
           monthData.value = monthResult;
           resetFlags();
         }
-        planStore.parentData = quarterData.value.filter(
-          (item: any) =>
-            item.year === planStore.year &&
-            item.quarter === planStore.quarter &&
-            item.isLoop === false
-        );
+        // 父任务缓存（季任务）为空时补拉一次
+        if (!quarterData.value.length) {
+          quarterData.value = await repo.listTasks({
+            periodType: 1,
+            ...quarterRange(planStore.year, planStore.quarter),
+          });
+        }
         break;
-      case 3:
-        if (
-          !planStore.yearChange &&
-          !quarterChange.value &&
-          !monthChange.value &&
-          !planStore.isWeekDataChanged
-        ) {
+      }
+      case 3: {
+        const needReload =
+          planStore.yearChange ||
+          quarterChange.value ||
+          monthChange.value ||
+          planStore.isWeekDataChanged;
+        if (!needReload) {
           taskData.value = weekData.value;
         } else {
-          const result = await getTaskFromWeek(planStore.year, planStore.month);
+          const result = await repo.listTasks({
+            periodType: 3,
+            ...monthRange(planStore.year, planStore.month),
+          });
           taskData.value = result;
           weekData.value = result;
           resetFlags();
         }
-        planStore.parentData = monthData.value.filter(
-          (item: any) =>
-            item.year === planStore.year && item.month === planStore.month && item.isLoop === false
-        );
+        // 父任务缓存（月任务）为空时补拉一次
+        if (!monthData.value.length) {
+          monthData.value = await repo.listTasks({
+            periodType: 2,
+            ...monthRange(planStore.year, planStore.month),
+          });
+        }
         break;
-      case 4:
-        if (
-          !planStore.yearChange &&
-          !quarterChange.value &&
-          !monthChange.value &&
-          !weekChange.value &&
-          !planStore.isDayDataChanged
-        ) {
+      }
+      case 4: {
+        const needReload =
+          planStore.yearChange ||
+          quarterChange.value ||
+          monthChange.value ||
+          weekChange.value ||
+          planStore.isDayDataChanged;
+        if (!needReload) {
           taskData.value = dayData.value;
         } else {
-          const result = await getTaskFromDay(
-            planStore.year,
-            planStore.month,
-            planStore.weekViewIndex
+          const result = await withFinishedCounts(
+            await repo.listTasks({
+              periodType: 4,
+              ...weekRange(planStore.year, planStore.month, planStore.weekViewIndex),
+            })
           );
           taskData.value = result;
           dayData.value = result;
           resetFlags();
         }
-        planStore.parentData = weekData.value.filter(
-          (item: any) =>
-            item.year === planStore.year &&
-            item.month === planStore.month &&
-            item.week === planStore.weekViewIndex &&
-            item.isLoop === false
-        );
+        // 父任务缓存（周任务）为空时补拉一次
+        if (!weekData.value.length) {
+          weekData.value = await repo.listTasks({
+            periodType: 3,
+            ...weekRange(planStore.year, planStore.month, planStore.weekViewIndex),
+          });
+        }
         break;
+      }
     }
     isLoading.value = false;
   }
@@ -278,15 +328,23 @@
   const filteredTaskData = computed(() => (n: number, date: string) => {
     switch (planStore.cycleValue) {
       case 1:
-        return taskData.value.filter((item: any) => item.quarter === n);
+        return taskData.value.filter((item: Task) =>
+          overlapsRange(item, quarterRange(planStore.year, n))
+        );
       case 2:
-        return taskData.value.filter((item: any) => item.month === monthArray.value[n - 1]);
+        return taskData.value.filter((item: Task) =>
+          overlapsRange(item, monthRange(planStore.year, monthArray.value[n - 1]))
+        );
       case 3:
-        return taskData.value.filter((item: any) => item.week === n);
+        return taskData.value.filter((item: Task) =>
+          overlapsRange(item, weekRange(planStore.year, planStore.month, n))
+        );
       case 4:
-        return taskData.value.filter((item: any) => item.day === date);
+        return taskData.value.filter((item: Task) => overlapsRange(item, dayRange(date)));
       default:
-        return taskData.value.filter((item: any) => item.quarter === n);
+        return taskData.value.filter((item: Task) =>
+          overlapsRange(item, quarterRange(planStore.year, n))
+        );
     }
   });
 </script>

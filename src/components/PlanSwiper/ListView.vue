@@ -66,10 +66,11 @@
 
     for (let i = 0; i < taskData.value.length; i++) {
       const task = taskData.value[i];
-      let singleTaskConsumeTime = 25 * task.pomodoro_count + 5 * (task.pomodoro_count - 1) + 15;
+      const quota = task.total_pomodoro_quota || 0;
+      const singleTaskConsumeTime = quota > 0 ? 25 * quota + 5 * (quota - 1) + 15 : 0;
       totalTimeConsumed.value += singleTaskConsumeTime;
 
-      if (task.isFinished === true) {
+      if (task.status === 'completed') {
         finishedTimeConsumed.value += singleTaskConsumeTime;
       }
     }

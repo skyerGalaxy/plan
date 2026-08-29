@@ -23,10 +23,13 @@
           </div>
         </div>
 
-        <!-- Tomato Icons (Pomodoro) -->
+        <!-- Tomato Icons (Pomodoro)：已完成红色番茄 + 剩余浅色番茄 -->
         <div class="rate-container" style="justify-content: center">
           <div v-for="n in Number($route.params.totalPomodoros)" :key="n">
-            <img :src="ColorTomatoIcon" class="tomato-icon" />
+            <img
+              :src="n <= completedCount ? ColorTomatoIcon : LightTomatoIcon"
+              class="tomato-icon"
+            />
           </div>
         </div>
 
@@ -44,15 +47,80 @@
 
 <script setup>
   import { ref, computed, onMounted } from 'vue';
+  import { useRoute } from 'vue-router';
+  import dayjs from 'dayjs';
+  import { getRepository } from '@/api';
+  import { useSettingsStore } from '@/stores/settingsStore';
 
   import ColorTomatoIcon from '@/assets/images/red_clock.svg';
+  import LightTomatoIcon from '@/assets/images/light_tomato.svg';
 
-  const minutes = ref(25);
+  const route = useRoute();
+  const taskId = Number(route.params.id);
+
+  const repo = getRepository();
+  const settings = useSettingsStore();
+  settings.load();
+
+  const minutes = ref(settings.workMinutes);
   const seconds = ref(0);
   const isRunning = ref(false);
   const isPaused = ref(false);
+  const completedCount = ref(0);
   let timerInterval = null;
-  const totalTime = 25 * 60; // Total time in seconds
+  let sessionStart = null; // 当前番茄开始时间
+  const totalTime = computed(() => settings.workMinutes * 60); // 单个番茄总时长（秒）
+
+  // 已完成番茄数（来自 pomodoro_records，按当日统计）
+  onMounted(async () => {
+    updateProgress();
+    if (!Number.isNaN(taskId)) {
+      try {
+        const counts = await repo.countCompletedPomodoros([taskId]);
+        completedCount.value = counts[taskId] ?? 0;
+      } catch (error) {
+        console.log('加载番茄记录失败:', error);
+      }
+    }
+  });
+
+  // 完成一个番茄：写入 pomodoro_records
+  async function saveCompletedRecord() {
+    if (Number.isNaN(taskId)) return;
+    const end = new Date();
+    try {
+      await repo.createPomodoroRecord({
+        task_id: taskId,
+        record_date: dayjs().format('YYYY-MM-DD'),
+        start_time: sessionStart ? sessionStart.toISOString() : end.toISOString(),
+        end_time: end.toISOString(),
+        duration_minutes: settings.workMinutes,
+        status: 'completed',
+      });
+      completedCount.value += 1;
+    } catch (error) {
+      console.log('保存番茄记录失败:', error);
+    }
+  }
+
+  // 中途结束：写入中断记录（满 1 分钟才记录）
+  async function saveInterruptedRecord() {
+    if (Number.isNaN(taskId) || !sessionStart) return;
+    const elapsedMinutes = Math.floor((Date.now() - sessionStart.getTime()) / 60000);
+    if (elapsedMinutes < 1) return;
+    try {
+      await repo.createPomodoroRecord({
+        task_id: taskId,
+        record_date: dayjs().format('YYYY-MM-DD'),
+        start_time: sessionStart.toISOString(),
+        end_time: new Date().toISOString(),
+        duration_minutes: elapsedMinutes,
+        status: 'interrupted',
+      });
+    } catch (error) {
+      console.log('保存番茄记录失败:', error);
+    }
+  }
 
   const formattedTime = computed(() => {
     return `${minutes.value.toString().padStart(2, '0')}:${seconds.value
@@ -71,11 +139,20 @@
   const startTimer = () => {
     isRunning.value = true;
     isPaused.value = false;
+    if (!sessionStart) {
+      sessionStart = new Date();
+    }
     timerInterval = setInterval(() => {
       if (seconds.value === 0) {
         if (minutes.value === 0) {
           clearInterval(timerInterval);
           isRunning.value = false;
+          saveCompletedRecord();
+          sessionStart = null;
+          // 重置计时器，便于开始下一个番茄
+          minutes.value = settings.workMinutes;
+          seconds.value = 0;
+          updateProgress();
           alert('Pomodoro Completed!');
           return;
         }
@@ -102,7 +179,9 @@
     isRunning.value = false;
     isPaused.value = false;
     clearInterval(timerInterval);
-    minutes.value = 25;
+    saveInterruptedRecord();
+    sessionStart = null;
+    minutes.value = settings.workMinutes;
     seconds.value = 0;
     updateProgress();
   };

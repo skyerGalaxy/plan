@@ -4,7 +4,7 @@
   import RangeButton from './RangeButton.vue';
   import PomodoroCounter from './PomodoroCounter.vue';
   import { ref } from 'vue';
-  import { deleteTask } from '@/utils/supabaseFunction';
+  import { getRepository } from '@/api';
   import { useRouter } from 'vue-router';
 
   const router = useRouter();
@@ -27,8 +27,9 @@
   const handleMenuClick = async ({ key }: { key: string }) => {
     switch (key) {
       case 'delete':
-        // 处理删除任务
-        await deleteTask(props.item.id, planStore.cycleValue).then(() => {
+        // 处理删除任务（软删除，含子孙任务）
+        try {
+          await getRepository().deleteTask(props.item.id);
           emit('delete-task', props.item.id);
           switch (planStore.cycleValue) {
             case 1:
@@ -44,7 +45,9 @@
               planStore.isDayDataChanged = true;
               break;
           }
-        });
+        } catch (error) {
+          console.log('删除任务失败:', error);
+        }
         break;
       case 'focus':
         // 处理开始专注
@@ -64,10 +67,10 @@
       <template #actions>
         <div class="task-actions">
           <div class="actions-container">
-            <RangeButton :range="props.item.range" :disable="true" />
+            <RangeButton :range="props.item.sort_order" :disable="true" />
             <PomodoroCounter
-              :total-pomodoro="props.item.pomodoro_count"
-              :finishedPomodoro="props.item.finish_pomodoro"
+              :total-pomodoro="props.item.total_pomodoro_quota"
+              :finishedPomodoro="props.item.finished_pomodoro"
               readonly
             />
           </div>
@@ -82,7 +85,7 @@
             placement="bottomLeft"
           >
             <div @click="handleOpenModal" class="task-title">
-              <span>{{ props.item.task }}</span>
+              <span>{{ props.item.title }}</span>
             </div>
             <template #overlay>
               <a-menu @click="handleMenuClick">
@@ -106,7 +109,7 @@
           <a-avatar
             @click="
               router.push(
-                `/pomodoro/${props.item.id}/${props.item.task}/${props.item.pomodoro_count}`
+                `/pomodoro/${props.item.id}/${encodeURIComponent(props.item.title)}/${props.item.total_pomodoro_quota}`
               )
             "
           >
@@ -127,8 +130,8 @@
             placement="bottomCenter"
           >
             <div @click="handleOpenModal" class="task-content">
-              <span style="margin-right: auto">{{ props.item.task }}</span>
-              <RangeButton :range="props.item.range" :disable="true" />
+              <span style="margin-right: auto">{{ props.item.title }}</span>
+              <RangeButton :range="props.item.sort_order" :disable="true" />
             </div>
             <template #overlay>
               <a-menu @click="handleMenuClick">

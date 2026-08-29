@@ -2,11 +2,13 @@ import dayjs from 'dayjs';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 import { usePlanerStore } from '@/stores/planStore';
 import {
-  getTaskFromDay,
-  getTaskFromQuarter,
-  getTaskFromMonth,
-  getTaskFromWeek,
-} from './supabaseFunction';
+  getRepository,
+  withFinishedCounts,
+  quarterRange,
+  monthRange,
+  weekRange,
+  overlapsRange,
+} from '@/api';
 
 dayjs.extend(quarterOfYear);
 
@@ -16,9 +18,6 @@ export const getCurrentDate = async () => {
   const currentQuarter = dayjs().quarter();
   //.month() returns 0-11, so we add 1 to get 1-12
   const currentMonth = dayjs().month() + 1;
-
-  // //get the month index in the current quarter
-  // const weeksOfMonth = Math.ceil(dayjs().daysInMonth() / 7);
 
   //get the week index in the current month
   const weekInMonth = Math.ceil(dayjs().date() / 7);
@@ -33,15 +32,21 @@ export const getCurrentDate = async () => {
   const weekActiveIndex = weekInMonth - 1;
   const dayActiveIndex = daysInWeek - 1;
 
-  let initParentData = <any[]>[];
+  const repo = getRepository();
 
-  const initDaydata = await getTaskFromDay(currentYear, currentMonth, weekInMonth);
-  const initQuarterData = await getTaskFromQuarter(currentYear);
-  const initMonthData = await getTaskFromMonth(currentYear, currentQuarter);
-  const initWeekData = await getTaskFromWeek(currentYear, currentMonth);
-  initParentData = initWeekData.filter(item => {
-    return item.year === currentYear && item.month === currentMonth && item.week === weekInMonth;
-  });
+  //按各视图的日期区间并行加载四类任务（period_type：1季 2月 3周 4日）
+  const [initQuarterData, initMonthData, initWeekData, initDayData] = (await Promise.all([
+    repo.listTasks({
+      periodType: 1,
+      overlapStart: `${currentYear}-01-01`,
+      overlapEnd: `${currentYear}-12-31`,
+    }),
+    repo.listTasks({ periodType: 2, ...quarterRange(currentYear, currentQuarter) }),
+    repo.listTasks({ periodType: 3, ...monthRange(currentYear, currentMonth) }),
+    withFinishedCounts(
+      await repo.listTasks({ periodType: 4, ...weekRange(currentYear, currentMonth, weekInMonth) })
+    ),
+  ])) as any[][];
 
   const planStore = usePlanerStore();
   planStore.$patch({
@@ -58,8 +63,11 @@ export const getCurrentDate = async () => {
     quarterData: initQuarterData,
     monthData: initMonthData,
     weekData: initWeekData,
-    dayData: initDaydata,
-    parentData: initParentData,
+    dayData: initDayData,
+    parentData: initWeekData.filter(
+      task =>
+        !task.is_cyclic && overlapsRange(task, weekRange(currentYear, currentMonth, weekInMonth))
+    ),
   });
 
   return {

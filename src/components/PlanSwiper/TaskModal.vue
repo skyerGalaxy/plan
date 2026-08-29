@@ -6,14 +6,7 @@
   import PomodoroCounter from './PomodoroCounter.vue';
   import LoopRuleModal from './LoopRuleModal.vue';
   import { usePlanerStore } from '@/stores/planStore';
-  import {
-    insertTaskToDay,
-    insertTaskToQuarter,
-    insertTaskToWeek,
-    insertTaskToMonth,
-    insertLoopTask,
-    updateTask,
-  } from '@/utils/supabaseFunction';
+  import { getRepository, getPeriodRange, type NewTask } from '@/api';
 
   const props = defineProps<{
     operateType: string; //inser on update,decide modalOk function
@@ -28,26 +21,27 @@
     (e: 'task-updated', task: any): void;
   }>();
 
-  const taskId = ref<number>(props.task.id);
-  const taskValue = ref<string>(props.task.task || '');
-  const isLoop = ref<boolean>(props.task.isLoop || false);
+  const repo = getRepository();
+  const planStore = usePlanerStore();
+
+  const taskId = ref<string>(props.task.id);
+  const taskValue = ref<string>(props.task.title || '');
+  const isLoop = ref<boolean>(!!props.task.is_cyclic);
   const cycleRule = ref<string | null>(props.task.cycle_rule || null);
   const loopRuleModalVisible = ref<boolean>(false);
-  const pomodoroCount = ref<number>(props.task.pomodoro_count || 0);
+  const pomodoroCount = ref<number>(props.task.total_pomodoro_quota || 0);
   const finishedPomodoo = ref<number>(props.task.finished_pomodoro || 0);
-  const rangeValue = ref<number>(props.task.range || 1);
+  const rangeValue = ref<number>(props.task.sort_order || 1);
   const parentTaskText = ref<string>('选择父任务');
-  const parentTaskIndex = ref<number>(1);
+  const parentTaskIndex = ref<string | null>(props.task.parent_id ?? null);
   const confirmLoading = ref<boolean>(false);
 
   watch(
     () => props.task,
     newTask => {
-      // Remove array destructuring
       if (props.operateType === 'insert') {
-        // Use props.operateType directly
         // Reset fields for new task
-        taskId.value = 0;
+        taskId.value = '';
         taskValue.value = '';
         isLoop.value = false;
         cycleRule.value = null;
@@ -55,36 +49,19 @@
         finishedPomodoo.value = 0;
         rangeValue.value = 1;
         parentTaskText.value = '选择父任务';
-        parentTaskIndex.value = 1;
+        parentTaskIndex.value = null;
       } else if (newTask && Object.keys(newTask).length > 0) {
         // Load task data for editing
         taskId.value = newTask.id;
-        taskValue.value = newTask.task || '';
-        isLoop.value = newTask.isLoop || false;
+        taskValue.value = newTask.title || '';
+        isLoop.value = !!newTask.is_cyclic;
         cycleRule.value = newTask.cycle_rule || null;
-        pomodoroCount.value = newTask.pomodoro_count || 0;
-        finishedPomodoo.value = newTask.finish_pomodoro || 0;
-        rangeValue.value = newTask.range || 1;
-        switch (planStore.cycleValue) {
-          case 2:
-            const quarterlyTask = planStore.parentData.find(
-              (item: any) => item.id === newTask.quarterly_id
-            );
-            parentTaskText.value = quarterlyTask ? quarterlyTask.task : '选择父任务';
-            break;
-          case 3:
-            const monthlyTask = planStore.parentData.find(
-              (item: any) => item.id === newTask.monthly_id
-            );
-            parentTaskText.value = monthlyTask ? monthlyTask.task : '选择父任务';
-            break;
-          case 4:
-            const weeklyTask = planStore.parentData.find(
-              (item: any) => item.id === newTask.weekly_id
-            );
-            parentTaskText.value = weeklyTask ? weeklyTask.task : '选择父任务';
-            break;
-        }
+        pomodoroCount.value = newTask.total_pomodoro_quota || 0;
+        finishedPomodoo.value = newTask.finished_pomodoro || 0;
+        rangeValue.value = newTask.sort_order || 1;
+        parentTaskIndex.value = newTask.parent_id ?? null;
+        const parentTask = planStore.parentData.find((item: any) => item.id === newTask.parent_id);
+        parentTaskText.value = parentTask ? parentTask.title : '选择父任务';
       }
     },
     {
@@ -93,10 +70,8 @@
     }
   );
 
-  const planStore = usePlanerStore();
-
   function handleMenuClick(task: any) {
-    parentTaskText.value = task.task;
+    parentTaskText.value = task.title;
     parentTaskIndex.value = task.id;
   }
 
@@ -108,7 +83,7 @@
 
   function modalCancel() {
     emit('update:visible', false);
-    taskId.value = 0;
+    taskId.value = '';
     taskValue.value = '';
     isLoop.value = false;
     cycleRule.value = null;
@@ -116,7 +91,7 @@
     finishedPomodoo.value = 0;
     rangeValue.value = 1;
     parentTaskText.value = '选择父任务';
-    parentTaskIndex.value = 1;
+    parentTaskIndex.value = null;
     confirmLoading.value = false;
   }
 
@@ -128,199 +103,99 @@
 
   async function modalOk() {
     confirmLoading.value = true;
-    if (!navigator.onLine) {
-      openNotificationWithIcon('error');
+
+    // 标题必填
+    if (!taskValue.value.trim()) {
+      notification.warning({ message: '任务填写不完整', description: '请输入任务内容' });
       confirmLoading.value = false;
       return;
-    } else {
-      let incomplete = true;
-      if (planStore.cycleValue === 1) {
-        incomplete = !taskValue.value.trim();
-      } else {
-        incomplete = !parentTaskText.value || pomodoroCount.value === 0;
-      }
-      if (incomplete) {
-        notification.warning({
-          message: '任务填写不完整',
-        });
-        confirmLoading.value = false;
-        modalCancel();
-        return;
-      }
-
-      // 月/周/日任务的非循环场景必须指定父任务；循环的月/周任务可无父任务创建
-      const parentUnselected = parentTaskText.value === '选择父任务';
-      const parentRequired =
-        planStore.cycleValue !== 1 && planStore.cycleValue !== undefined && !isLoop.value;
-      if (parentRequired && parentUnselected) {
-        notification.warning({
-          message: '请选择父任务',
-          description: '未指定父任务，任务无法创建',
-        });
-        confirmLoading.value = false;
-        return;
-      }
-
-      if (props.operateType === 'insert') {
-        try {
-          let addedTask = {};
-          switch (planStore.cycleValue) {
-            case 1:
-              addedTask = await insertTaskToQuarter(
-                taskValue.value,
-                planStore.year,
-                planStore.quarter,
-                isLoop.value,
-                rangeValue.value
-              );
-              emit('task-added', addedTask);
-              planStore.isQuarterDataChanged = true;
-              break;
-            case 2:
-              addedTask = await insertTaskToMonth(
-                parentTaskIndex.value,
-                planStore.year,
-                planStore.month,
-                planStore.quarter,
-                taskValue.value,
-                isLoop.value,
-                rangeValue.value
-              );
-              emit('task-added', addedTask);
-              planStore.isMonthDataChanged = true;
-              break;
-
-            case 3:
-              addedTask = await insertTaskToWeek(
-                parentTaskIndex.value,
-                planStore.year,
-                planStore.month,
-                planStore.weekViewIndex,
-                taskValue.value,
-                isLoop.value,
-                rangeValue.value
-              );
-              emit('task-added', addedTask);
-              planStore.isWeekDataChanged = true;
-              break;
-
-            case 4:
-              if (!isLoop.value) {
-                addedTask = await insertTaskToDay(
-                  parentTaskIndex.value,
-                  planStore.year,
-                  planStore.month,
-                  planStore.weekViewIndex,
-                  props.slideDate,
-                  taskValue.value,
-                  pomodoroCount.value,
-                  rangeValue.value
-                );
-              } else {
-                console.log('正在执行循环任务插入');
-                addedTask = await insertLoopTask(
-                  taskValue.value,
-                  rangeValue.value,
-                  pomodoroCount.value,
-                  '每日循环',
-                  '2025-06-01',
-                  '2025-06-30'
-                );
-              }
-              emit('task-added', addedTask); // Emit the added task
-              planStore.isDayDataChanged = true;
-              break;
-          }
-          openNotificationWithIcon('success');
-        } catch (error) {
-          openNotificationWithIcon('error');
-        }
-      } else if (props.operateType === 'update') {
-        let tableType;
-        let newTask = {};
-        switch (planStore.cycleValue) {
-          case 1:
-            tableType = 'QuarterlyPlans';
-            newTask = {
-              id: taskId.value,
-              task: taskValue.value,
-              year: planStore.year,
-              quarter: planStore.quarter,
-              range: rangeValue.value,
-              isLoop: isLoop.value,
-            };
-            break;
-          case 2:
-            tableType = 'MonthlyPlans';
-            newTask = {
-              id: taskId.value,
-              quarterly_id: parentTaskIndex.value,
-              year: planStore.year,
-              month: planStore.month,
-              quarter: planStore.quarter,
-              task: taskValue.value,
-              range: rangeValue.value,
-              isLoop: isLoop.value,
-            };
-            break;
-          case 3:
-            tableType = 'WeeklyPlans';
-            newTask = {
-              id: taskId.value,
-              monthly_id: parentTaskIndex.value,
-              year: planStore.year,
-              month: planStore.month,
-              week: planStore.weekViewIndex,
-              task: taskValue.value,
-              range: rangeValue.value,
-              isLoop: isLoop.value,
-            };
-            break;
-          case 4:
-            tableType = 'DailyPlans';
-            newTask = {
-              id: taskId.value,
-              weekly_id: parentTaskIndex.value,
-              year: planStore.year,
-              month: planStore.month,
-              week: planStore.weekViewIndex,
-              day: props.slideDate,
-              task: taskValue.value,
-              pomodoro_count: pomodoroCount.value,
-              range: rangeValue.value,
-              finish_pomodoro: 0,
-              isFinished: false,
-            };
-            break;
-        }
-        try {
-          await updateTask(newTask, tableType || 'DailyPlans').then(() => {
-            emit('task-updated', newTask);
-          });
-          openNotificationWithIcon('success');
-          switch (planStore.cycleValue) {
-            case 1:
-              planStore.isQuarterDataChanged = true;
-              break;
-            case 2:
-              planStore.isMonthDataChanged = true;
-              break;
-            case 3:
-              planStore.isWeekDataChanged = true;
-              break;
-            case 4:
-              planStore.isDayDataChanged = true;
-              break;
-          }
-        } catch (error) {
-          openNotificationWithIcon('error');
-        }
-      }
-
-      // 重置表单
-      confirmLoading.value = false;
-      modalCancel();
     }
+
+    // 日任务必须设置番茄配额
+    if (planStore.cycleValue === 4 && pomodoroCount.value <= 0) {
+      notification.warning({ message: '请设置番茄数' });
+      confirmLoading.value = false;
+      return;
+    }
+
+    // 月/周/日任务的非循环场景必须指定父任务；循环的月/周任务可无父任务创建；季任务无父任务要求
+    const parentUnselected = parentTaskIndex.value === null;
+    const parentRequired =
+      [2, 3, 4].includes(planStore.cycleValue) && !(isLoop.value && planStore.cycleValue !== 4);
+    if (parentRequired && parentUnselected) {
+      notification.warning({
+        message: '请选择父任务',
+        description: '未指定父任务，任务无法创建',
+      });
+      confirmLoading.value = false;
+      return;
+    }
+
+    // 当前视图上下文对应的起止日期
+    const periodRange = getPeriodRange(planStore.cycleValue, {
+      year: planStore.year,
+      quarter: planStore.quarter,
+      month: planStore.month,
+      weekViewIndex: planStore.weekViewIndex,
+      slideDate: props.slideDate,
+    });
+
+    try {
+      if (props.operateType === 'insert') {
+        const addedTask = await repo.createTask({
+          parent_id: parentTaskIndex.value,
+          title: taskValue.value.trim(),
+          description: '',
+          period_type: planStore.cycleValue as 1 | 2 | 3 | 4,
+          total_pomodoro_quota: planStore.cycleValue === 4 ? pomodoroCount.value : 0,
+          start_date: periodRange.start,
+          end_date: periodRange.end,
+          is_cyclic: isLoop.value ? 1 : 0,
+          cycle_rule: isLoop.value ? cycleRule.value : null,
+          sort_order: rangeValue.value,
+          status: 'pending',
+        });
+        emit('task-added', addedTask);
+        openNotificationWithIcon('success');
+      } else if (props.operateType === 'update') {
+        const patch: Partial<NewTask> = {
+          title: taskValue.value.trim(),
+          parent_id: parentTaskIndex.value,
+          sort_order: rangeValue.value,
+          is_cyclic: isLoop.value ? 1 : 0,
+          cycle_rule: isLoop.value ? cycleRule.value : null,
+        };
+        if (planStore.cycleValue === 4) {
+          patch.total_pomodoro_quota = pomodoroCount.value;
+        }
+        const updatedTask = await repo.updateTask(taskId.value, patch);
+        emit('task-updated', updatedTask);
+        openNotificationWithIcon('success');
+      }
+
+      // 标记数据变化，触发对应视图重新加载
+      switch (planStore.cycleValue) {
+        case 1:
+          planStore.isQuarterDataChanged = true;
+          break;
+        case 2:
+          planStore.isMonthDataChanged = true;
+          break;
+        case 3:
+          planStore.isWeekDataChanged = true;
+          break;
+        case 4:
+          planStore.isDayDataChanged = true;
+          break;
+      }
+    } catch (error) {
+      console.log('保存任务失败:', error);
+      openNotificationWithIcon('error');
+    }
+
+    // 重置表单
+    confirmLoading.value = false;
+    modalCancel();
   }
 </script>
 
@@ -365,19 +240,19 @@
                 :key="index"
               >
                 <div
-                  v-if="item.task.length > 13"
+                  v-if="item.title.length > 13"
                   style="display: flex; justify-content: space-between; width: 100%"
                 >
-                  <a-tooltip v-if="item.task.length > 13" :title="item.task">
+                  <a-tooltip v-if="item.title.length > 13" :title="item.title">
                     <span>
-                      {{ item.task.substring(0, 13) + '...' }}
+                      {{ item.title.substring(0, 13) + '...' }}
                     </span>
                   </a-tooltip>
-                  <RangeButton :range="item.range" :disable="true" />
+                  <RangeButton :range="item.sort_order" :disable="true" />
                 </div>
                 <div v-else style="display: flex; justify-content: space-between; width: 100%">
-                  <span>{{ item.task }}</span>
-                  <RangeButton :range="item.range" :disable="true" />
+                  <span>{{ item.title }}</span>
+                  <RangeButton :range="item.sort_order" :disable="true" />
                 </div>
               </a-menu-item>
             </a-menu>
