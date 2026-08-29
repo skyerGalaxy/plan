@@ -4,6 +4,7 @@
   import { DownOutlined, SyncOutlined } from '@ant-design/icons-vue';
   import RangeButton from './RangeButton.vue';
   import PomodoroCounter from './PomodoroCounter.vue';
+  import LoopRuleModal from './LoopRuleModal.vue';
   import { usePlanerStore } from '@/stores/planStore';
   import {
     insertTaskToDay,
@@ -30,6 +31,8 @@
   const taskId = ref<number>(props.task.id);
   const taskValue = ref<string>(props.task.task || '');
   const isLoop = ref<boolean>(props.task.isLoop || false);
+  const cycleRule = ref<string | null>(props.task.cycle_rule || null);
+  const loopRuleModalVisible = ref<boolean>(false);
   const pomodoroCount = ref<number>(props.task.pomodoro_count || 0);
   const finishedPomodoo = ref<number>(props.task.finished_pomodoro || 0);
   const rangeValue = ref<number>(props.task.range || 1);
@@ -47,6 +50,7 @@
         taskId.value = 0;
         taskValue.value = '';
         isLoop.value = false;
+        cycleRule.value = null;
         pomodoroCount.value = 0;
         finishedPomodoo.value = 0;
         rangeValue.value = 1;
@@ -57,6 +61,7 @@
         taskId.value = newTask.id;
         taskValue.value = newTask.task || '';
         isLoop.value = newTask.isLoop || false;
+        cycleRule.value = newTask.cycle_rule || null;
         pomodoroCount.value = newTask.pomodoro_count || 0;
         finishedPomodoo.value = newTask.finish_pomodoro || 0;
         rangeValue.value = newTask.range || 1;
@@ -95,11 +100,18 @@
     parentTaskIndex.value = task.id;
   }
 
+  // 循环规则确认后，同步 isLoop 状态
+  function onRuleChange(rule: string | null) {
+    cycleRule.value = rule;
+    isLoop.value = !!rule;
+  }
+
   function modalCancel() {
     emit('update:visible', false);
     taskId.value = 0;
     taskValue.value = '';
     isLoop.value = false;
+    cycleRule.value = null;
     pomodoroCount.value = 0;
     finishedPomodoo.value = 0;
     rangeValue.value = 1;
@@ -328,8 +340,7 @@
       </div>
       <div style="display: flex; justify-content: space-between; margin-bottom: 10px">
         <span
-          v-if="planStore.cycleValue !== 4"
-          @click="isLoop = !isLoop"
+          @click="loopRuleModalVisible = true"
           :style="{
             display: 'inline-flex',
             alignItems: 'center',
@@ -385,6 +396,13 @@
         </div>
       </div>
     </div>
+    <LoopRuleModal
+      v-model:open="loopRuleModalVisible"
+      :rule="cycleRule"
+      :period-type="planStore.cycleValue"
+      :start-date="props.slideDate"
+      @update:rule="onRuleChange"
+    />
   </a-modal>
 </template>
 
