@@ -6,75 +6,52 @@
   import { EffectCoverflow, Pagination } from 'swiper/modules';
   import dayjs from 'dayjs';
   import ListView from './ListView.vue';
-  import { ref, watch, computed, watchEffect } from 'vue';
+  import { ref, watch, computed } from 'vue';
   import { usePlanerStore } from '@/stores/planStore';
   const modules = [EffectCoverflow, Pagination];
 
-  import {
-    getRepository,
-    withFinishedCounts,
-    quarterRange,
-    monthRange,
-    weekRange,
-    dayRange,
-    overlapsRange,
-    type Task,
-  } from '@/api';
+  import { quarterRange, monthRange, weekRange, dayRange, overlapsRange, type Task } from '@/api';
   import { getWeekDateRange, countWorkdaysInWeek, getDayTypeInfo } from '@/utils/holiday';
 
   const planStore = usePlanerStore();
-  // 用 getSlideCount() 计算初始 slide 数（store.slideCount 存的是当前周的天数，对周视图不适用）
+  // 用 getSlideCount() 计算初始 slide 数
   const slideCount = ref(planStore.getSlideCount());
   const activeIndex = ref(planStore.dayActiveIndex);
 
   const key = ref(`${planStore.cycleValue}-${planStore.year}`);
 
-  const taskData = ref<any[]>(planStore.dayData);
-  const quarterData = ref<any[]>(planStore.quarterData);
-  const monthData = ref<any[]>(planStore.monthData);
-  const weekData = ref<any[]>(planStore.weekData);
-  const dayData = ref<any[]>(planStore.dayData);
+  const isLoading = ref(false);
 
-  const repo = getRepository();
+  // 当前视图数据（store 为唯一数据源，直接响应式引用）
+  const currentData = computed<Task[]>(() => planStore.currentData);
 
-  // 当前滑块上下文对应的日期范围（随 store 状态响应式变化）
-  function currentSlideRange() {
-    switch (planStore.cycleValue) {
-      case 2:
-        return quarterRange(planStore.year, planStore.quarter);
-      case 3:
-        return monthRange(planStore.year, planStore.month);
-      case 4:
-        return weekRange(planStore.year, planStore.month, planStore.weekViewIndex);
-      default:
-        return quarterRange(planStore.year, planStore.quarter);
+  // ---- 变更标志 → 自动刷新当前视图 ----
+  watch(
+    () => [
+      planStore.isQuarterDataChanged,
+      planStore.isMonthDataChanged,
+      planStore.isWeekDataChanged,
+      planStore.isDayDataChanged,
+    ],
+    async ([q, m, w, d]) => {
+      const changed =
+        (planStore.cycleValue === 1 && q) ||
+        (planStore.cycleValue === 2 && (q || m)) ||
+        (planStore.cycleValue === 3 && (q || m || w)) ||
+        (planStore.cycleValue === 4 && (q || m || w || d));
+      if (!changed) return;
+      isLoading.value = true;
+      try {
+        await planStore.refreshCurrent();
+      } finally {
+        isLoading.value = false;
+        planStore.isQuarterDataChanged = false;
+        planStore.isMonthDataChanged = false;
+        planStore.isWeekDataChanged = false;
+        planStore.isDayDataChanged = false;
+      }
     }
-  }
-
-  // 父任务候选：上一级粒度任务中与当前滑块区间有交集的非循环任务
-  const parentData = computed<Task[]>(() => {
-    const range = currentSlideRange();
-    switch (planStore.cycleValue) {
-      case 2:
-        return quarterData.value.filter(t => !t.is_cyclic && overlapsRange(t, range));
-      case 3:
-        return monthData.value.filter(t => !t.is_cyclic && overlapsRange(t, range));
-      case 4:
-        return weekData.value.filter(t => !t.is_cyclic && overlapsRange(t, range));
-      default:
-        return [];
-    }
-  });
-
-  // 同步到 store，供 TaskModal 等子组件读取
-  watchEffect(() => {
-    planStore.parentData = parentData.value;
-  });
-
-  const quarterChange = ref(false);
-  const monthChange = ref(false);
-  const weekChange = ref(false);
-  const dayChange = ref(false);
+  );
 
   const slideDateArray = computed(() => {
     switch (planStore.cycleValue) {
@@ -104,8 +81,6 @@
   const monthArray = ref<number[]>([1, 2, 3]);
 
   // 每个 slide 的附加信息（与 slideDateArray 一一对应）
-  // - 周视图：日期范围 + 工作日天数
-  // - 日视图：工作日/休息日类型
   interface SlideMeta {
     dateRange?: string;
     workdayCount?: number;
@@ -140,125 +115,12 @@
     }
   });
 
-  const isLoading = ref(false);
+  watch(() => planStore.cycleValue, () => {
+    slideCount.value = planStore.getSlideCount();
+    key.value = `${planStore.cycleValue}-${planStore.year}`;
+  });
 
-  function resetFlags() {
-    planStore.yearChange = false;
-    quarterChange.value = false;
-    monthChange.value = false;
-    weekChange.value = false;
-    planStore.isQuarterDataChanged = false;
-    planStore.isMonthDataChanged = false;
-    planStore.isWeekDataChanged = false;
-    planStore.isDayDataChanged = false;
-  }
-
-  async function handleCycleValueChange() {
-    isLoading.value = true;
-    switch (planStore.cycleValue) {
-      case 1: {
-        if (!planStore.yearChange) {
-          taskData.value = quarterData.value;
-        } else {
-          const quarterResult = await repo.listTasks({
-            periodType: 1,
-            overlapStart: `${planStore.year}-01-01`,
-            overlapEnd: `${planStore.year}-12-31`,
-          });
-          taskData.value = quarterResult;
-          quarterData.value = quarterResult;
-          resetFlags();
-        }
-        break;
-      }
-      case 2: {
-        const needReload =
-          planStore.yearChange ||
-          quarterChange.value ||
-          planStore.isQuarterDataChanged ||
-          planStore.isMonthDataChanged;
-        if (!needReload) {
-          taskData.value = monthData.value;
-        } else {
-          const monthResult = await repo.listTasks({
-            periodType: 2,
-            ...quarterRange(planStore.year, planStore.quarter),
-          });
-          taskData.value = monthResult;
-          monthData.value = monthResult;
-          resetFlags();
-        }
-        // 父任务缓存（季任务）为空时补拉一次
-        if (!quarterData.value.length) {
-          quarterData.value = await repo.listTasks({
-            periodType: 1,
-            ...quarterRange(planStore.year, planStore.quarter),
-          });
-        }
-        break;
-      }
-      case 3: {
-        const needReload =
-          planStore.yearChange ||
-          quarterChange.value ||
-          monthChange.value ||
-          planStore.isWeekDataChanged;
-        if (!needReload) {
-          taskData.value = weekData.value;
-        } else {
-          const result = await repo.listTasks({
-            periodType: 3,
-            ...monthRange(planStore.year, planStore.month),
-          });
-          taskData.value = result;
-          weekData.value = result;
-          resetFlags();
-        }
-        // 父任务缓存（月任务）为空时补拉一次
-        if (!monthData.value.length) {
-          monthData.value = await repo.listTasks({
-            periodType: 2,
-            ...monthRange(planStore.year, planStore.month),
-          });
-        }
-        break;
-      }
-      case 4: {
-        const needReload =
-          planStore.yearChange ||
-          quarterChange.value ||
-          monthChange.value ||
-          weekChange.value ||
-          planStore.isDayDataChanged;
-        if (!needReload) {
-          taskData.value = dayData.value;
-        } else {
-          const result = await withFinishedCounts(
-            await repo.listTasks({
-              periodType: 4,
-              ...weekRange(planStore.year, planStore.month, planStore.weekViewIndex),
-            })
-          );
-          taskData.value = result;
-          dayData.value = result;
-          resetFlags();
-        }
-        // 父任务缓存（周任务）为空时补拉一次
-        if (!weekData.value.length) {
-          weekData.value = await repo.listTasks({
-            periodType: 3,
-            ...weekRange(planStore.year, planStore.month, planStore.weekViewIndex),
-          });
-        }
-        break;
-      }
-    }
-    isLoading.value = false;
-  }
-
-  watch(() => planStore.cycleValue, handleCycleValueChange);
-
-  planStore.$subscribe(async (_, state) => {
+  planStore.$subscribe((_, state) => {
     slideCount.value = planStore.getSlideCount();
     key.value = `${state.cycleValue}-${state.year}`;
     switch (planStore.cycleValue) {
@@ -293,7 +155,6 @@
           weekActiveIndex: 0,
           dayActiveIndex: 0,
         });
-        quarterChange.value = true;
         break;
       case 2:
         planStore.$patch({
@@ -304,7 +165,6 @@
           weekActiveIndex: 0,
           dayActiveIndex: 0,
         });
-        monthChange.value = true;
         break;
       case 3:
         planStore.$patch({
@@ -313,36 +173,35 @@
           weekActiveIndex: swiper.activeIndex,
           dayActiveIndex: 0,
         });
-        weekChange.value = true;
         break;
       case 4:
         planStore.$patch({
           dayViewIndex: swiper.activeIndex + 1,
           dayActiveIndex: swiper.activeIndex,
         });
-        dayChange.value = true;
         break;
     }
   }
 
+  // 根据滑块 n 与日期筛出当前 slide 的任务
   const filteredTaskData = computed(() => (n: number, date: string) => {
     switch (planStore.cycleValue) {
       case 1:
-        return taskData.value.filter((item: Task) =>
+        return currentData.value.filter((item: Task) =>
           overlapsRange(item, quarterRange(planStore.year, n))
         );
       case 2:
-        return taskData.value.filter((item: Task) =>
+        return currentData.value.filter((item: Task) =>
           overlapsRange(item, monthRange(planStore.year, monthArray.value[n - 1]))
         );
       case 3:
-        return taskData.value.filter((item: Task) =>
+        return currentData.value.filter((item: Task) =>
           overlapsRange(item, weekRange(planStore.year, planStore.month, n))
         );
       case 4:
-        return taskData.value.filter((item: Task) => overlapsRange(item, dayRange(date)));
+        return currentData.value.filter((item: Task) => overlapsRange(item, dayRange(date)));
       default:
-        return taskData.value.filter((item: Task) =>
+        return currentData.value.filter((item: Task) =>
           overlapsRange(item, quarterRange(planStore.year, n))
         );
     }

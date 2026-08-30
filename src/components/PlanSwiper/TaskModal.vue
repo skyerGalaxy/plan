@@ -95,9 +95,18 @@
     confirmLoading.value = false;
   }
 
-  const openNotificationWithIcon = (type: 'success' | 'error') => {
-    let message = type === 'success' ? '添加成功' : '添加失败';
-    let description = type === 'success' ? '任务已经添加到计划中' : '请检查网络连接或者联系管理员';
+  /** 弹出操作结果提示，消息文案与插入/更新操作及结果保持一致 */
+  const openNotificationWithIcon = (type: 'success' | 'error', action?: 'insert' | 'update') => {
+    const op = action ?? props.operateType;
+    let message: string;
+    let description: string;
+    if (type === 'success') {
+      message = op === 'update' ? '更新成功' : '添加成功';
+      description = op === 'update' ? '任务已更新' : '任务已经添加到计划中';
+    } else {
+      message = op === 'update' ? '更新失败' : '添加失败';
+      description = '请检查网络连接或者联系管理员';
+    }
     return notification[type]({ message, description });
   };
 
@@ -215,6 +224,7 @@
       </div>
       <div style="display: flex; justify-content: space-between; margin-bottom: 10px">
         <span
+          v-if="planStore.cycleValue !== 4"
           @click="loopRuleModalVisible = true"
           :style="{
             display: 'inline-flex',

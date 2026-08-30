@@ -1,14 +1,6 @@
 import dayjs from 'dayjs';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 import { usePlanerStore } from '@/stores/planStore';
-import {
-  getRepository,
-  withFinishedCounts,
-  quarterRange,
-  monthRange,
-  weekRange,
-  overlapsRange,
-} from '@/api';
 
 dayjs.extend(quarterOfYear);
 
@@ -32,22 +24,6 @@ export const getCurrentDate = async () => {
   const weekActiveIndex = weekInMonth - 1;
   const dayActiveIndex = daysInWeek - 1;
 
-  const repo = getRepository();
-
-  //按各视图的日期区间并行加载四类任务（period_type：1季 2月 3周 4日）
-  const [initQuarterData, initMonthData, initWeekData, initDayData] = (await Promise.all([
-    repo.listTasks({
-      periodType: 1,
-      overlapStart: `${currentYear}-01-01`,
-      overlapEnd: `${currentYear}-12-31`,
-    }),
-    repo.listTasks({ periodType: 2, ...quarterRange(currentYear, currentQuarter) }),
-    repo.listTasks({ periodType: 3, ...monthRange(currentYear, currentMonth) }),
-    withFinishedCounts(
-      await repo.listTasks({ periodType: 4, ...weekRange(currentYear, currentMonth, weekInMonth) })
-    ),
-  ])) as any[][];
-
   const planStore = usePlanerStore();
   planStore.$patch({
     year: currentYear,
@@ -60,15 +36,10 @@ export const getCurrentDate = async () => {
     monthActiveIndex: monthActiveIndex,
     weekActiveIndex: weekActiveIndex,
     dayActiveIndex: dayActiveIndex,
-    quarterData: initQuarterData,
-    monthData: initMonthData,
-    weekData: initWeekData,
-    dayData: initDayData,
-    parentData: initWeekData.filter(
-      task =>
-        !task.is_cyclic && overlapsRange(task, weekRange(currentYear, currentMonth, weekInMonth))
-    ),
   });
+
+  // 并行加载四类任务（季/月/周/日），parentData 由 store 内 computed 派生
+  await planStore.init();
 
   return {
     year: currentYear,

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-  import { ref, onMounted } from 'vue';
+  import { ref, computed, watch } from 'vue';
   import { CoffeeOutlined, HomeOutlined } from '@ant-design/icons-vue';
 
   import addLightImage from '@/assets/images/add_light.svg';
@@ -24,8 +24,6 @@
     daySubLabel?: string;
   }>();
 
-  const taskData = ref(props.taskData);
-
   //modal control
   const modalVisible = ref<boolean>(false);
   const currentTask = ref<Task>({});
@@ -33,31 +31,13 @@
   const totalTimeConsumed = ref(0);
   const finishedTimeConsumed = ref(0);
 
+  // 任务数据直接由父级（store 唯一数据源）注入，保持响应式，增删改后由 store 自动刷新
+  const taskData = computed(() => props.taskData);
+
   function handleOpenModal(task: Task) {
     operateType.value = 'update';
     currentTask.value = { ...task };
     modalVisible.value = true;
-  }
-
-  function handleTaskAdded(newTask: Task): void {
-    taskData.value.push(newTask);
-    computeTaskTimeConsumption();
-  }
-
-  function handleTaskUpdated(updatedTask: Task): void {
-    const index = taskData.value.findIndex(task => task.id === updatedTask.id);
-    if (index !== -1) {
-      taskData.value.splice(index, 1, updatedTask);
-      computeTaskTimeConsumption();
-    }
-  }
-
-  function handleTaskDeleted(taskId: number): void {
-    const index = taskData.value.findIndex(task => task.id === taskId);
-    if (index !== -1) {
-      taskData.value.splice(index, 1);
-      computeTaskTimeConsumption();
-    }
   }
 
   function computeTaskTimeConsumption(): void {
@@ -79,9 +59,8 @@
     finishedTimeConsumed.value = finishedTimeConsumed.value / 60;
   }
 
-  onMounted(() => {
-    computeTaskTimeConsumption();
-  });
+  // 任务数据变化时自动重算耗时统计（替代旧的 onMounted + 手动调用）
+  watch(taskData, () => computeTaskTimeConsumption(), { immediate: true });
 </script>
 
 <template>
@@ -138,7 +117,7 @@
   <div class="list-container">
     <a-list item-layout="vertical" :data-source="taskData" class="full-width-list">
       <template #renderItem="{ item }">
-        <TaskListItem :item="item" @open-modal="handleOpenModal" @delete-task="handleTaskDeleted" />
+        <TaskListItem :item="item" @open-modal="handleOpenModal" />
       </template>
     </a-list>
 
@@ -147,8 +126,6 @@
       :task="currentTask"
       :operate-type="operateType"
       :slide-date="slideDate"
-      @task-added="handleTaskAdded"
-      @task-updated="handleTaskUpdated"
     />
   </div>
 </template>
