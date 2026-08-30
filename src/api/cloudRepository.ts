@@ -18,7 +18,9 @@ import { normalizePomodoroRecord, normalizeTask, newId } from './helpers';
  * create extension if not exists "pgcrypto";
  * create table if not exists tasks (
  *   id uuid primary key default gen_random_uuid(),
- *   parent_id uuid references tasks(id),
+ *   quarter_id uuid references tasks(id),
+ *   month_id uuid references tasks(id),
+ *   week_id uuid references tasks(id),
  *   title text not null,
  *   description text default '',
  *   period_type int not null,
@@ -55,6 +57,43 @@ const supabase = createClient(
   import.meta.env.VITE_anonKey
 );
 
+/**
+ * 根据全部任务的 id/三列祖先 id，收集某任务的完整子孙集合（含自身）。
+ * 采用 visited 去重 + 队列逐项 push，避免数组过大造成展开参数溢出或循环引用导致无限增长。
+ */
+function collectSubtreeIds(
+  rows: {
+    id: string;
+    quarter_id: string | null;
+    month_id: string | null;
+    week_id: string | null;
+  }[],
+  rootId: string
+): string[] {
+  const childrenOf = new Map<string, string[]>();
+  for (const row of rows) {
+    for (const anc of [row.quarter_id, row.month_id, row.week_id]) {
+      if (anc != null) {
+        const list = childrenOf.get(anc);
+        if (list) list.push(row.id);
+        else childrenOf.set(anc, [row.id]);
+      }
+    }
+  }
+  const ids: string[] = [rootId];
+  const visited = new Set<string>([rootId]);
+  for (let i = 0; i < ids.length; i++) {
+    const children = childrenOf.get(ids[i]);
+    if (!children) continue;
+    for (const cid of children) {
+      if (visited.has(cid)) continue;
+      visited.add(cid);
+      ids.push(cid);
+    }
+  }
+  return ids;
+}
+
 export const cloudRepository: TaskRepository = {
   async listTasks(filter: TaskFilter = {}): Promise<Task[]> {
     let query = supabase.from('tasks').select('*');
@@ -66,12 +105,6 @@ export const cloudRepository: TaskRepository = {
     }
     if (filter.isCyclic !== undefined) {
       query = query.eq('is_cyclic', filter.isCyclic);
-    }
-    if (filter.parentId !== undefined) {
-      query =
-        filter.parentId === null
-          ? query.is('parent_id', null)
-          : query.eq('parent_id', filter.parentId);
     }
     if (filter.overlapStart) {
       query = query.gte('end_date', filter.overlapStart);
@@ -91,17 +124,26 @@ export const cloudRepository: TaskRepository = {
   },
 
   async createTask(input: NewTask): Promise<Task> {
-    // 应用层生成 UUID，保证云端与本地主键一致
-    const insert = { ...input, id: input.id ?? newId() };
+    // 三个上级 id 由调用方（UI）直接传入，缺失则为 null
+    const insert = {
+      ...input,
+      // 应用层生成 UUID，保证云端与本地主键一致
+      id: input.id ?? newId(),
+    };
     const { data, error } = await supabase.from('tasks').insert(insert).select().single();
     if (error) throw error;
     return normalizeTask(data);
   },
 
   async updateTask(id: string, patch: Partial<NewTask>): Promise<Task> {
+    // patch 直接包含三个上级 id（调用方在改父任务时会一并传入），缺失则不更新
+    const update: Record<string, any> = {
+      ...patch,
+      updated_at: new Date().toISOString(),
+    };
     const { data, error } = await supabase
       .from('tasks')
-      .update({ ...patch, updated_at: new Date().toISOString() })
+      .update(update)
       .eq('id', id)
       .select()
       .single();
@@ -109,32 +151,51 @@ export const cloudRepository: TaskRepository = {
     return normalizeTask(data);
   },
 
-  async deleteTask(id: string): Promise<void> {
+  async deleteTask(id: string): Promise<{ deleted: string[]; blocked: string[] }> {
     const now = new Date().toISOString();
-    // 取全部存活任务的 id/parent_id，在客户端算出全部子孙任务后一并软删除
+    // 取全部存活任务的 id/三列祖先 id，在客户端算出全部子孙后，仅删除其中未执行的任务
     const { data, error } = await supabase
       .from('tasks')
-      .select('id, parent_id')
+      .select('id, quarter_id, month_id, week_id')
       .is('deleted_at', null);
     if (error) throw error;
-    const rows = data ?? [];
-    const childrenOf = new Map<string, string[]>();
-    for (const row of rows) {
-      if (row.parent_id != null) {
-        const list = childrenOf.get(row.parent_id) ?? [];
-        list.push(row.id);
-        childrenOf.set(row.parent_id, list);
-      }
+    const subtreeIds = collectSubtreeIds(data ?? [], id);
+    const counts = await cloudRepository.countPomodoroRecords(subtreeIds);
+    const blocked = subtreeIds.filter(tid => (counts[tid] ?? 0) > 0);
+    const deletable = subtreeIds.filter(tid => !(counts[tid] ?? 0));
+
+    if (deletable.length) {
+      const { error: updateError } = await supabase
+        .from('tasks')
+        .update({ deleted_at: now, updated_at: now })
+        .in('id', deletable);
+      if (updateError) throw updateError;
     }
-    const ids: string[] = [id];
-    for (let i = 0; i < ids.length; i++) {
-      ids.push(...(childrenOf.get(ids[i]) ?? []));
-    }
-    const { error: updateError } = await supabase
+    return { deleted: deletable, blocked };
+  },
+
+  async getTaskSubtreeIds(id: string): Promise<string[]> {
+    // 取全部存活任务的 id/三列祖先 id，客户端算出全部子孙（含自身）
+    const { data, error } = await supabase
       .from('tasks')
-      .update({ deleted_at: now, updated_at: now })
-      .in('id', ids);
-    if (updateError) throw updateError;
+      .select('id, quarter_id, month_id, week_id')
+      .is('deleted_at', null);
+    if (error) throw error;
+    return collectSubtreeIds(data ?? [], id);
+  },
+
+  async countPomodoroRecords(taskIds: string[]): Promise<Record<string, number>> {
+    if (!taskIds.length) return {};
+    const { data, error } = await supabase
+      .from('pomodoro_records')
+      .select('task_id')
+      .in('task_id', taskIds);
+    if (error) throw error;
+    const result: Record<string, number> = {};
+    for (const row of data ?? []) {
+      result[row.task_id] = (result[row.task_id] ?? 0) + 1;
+    }
+    return result;
   },
 
   async listPomodoroRecords(filter: PomodoroRecordFilter = {}): Promise<PomodoroRecord[]> {

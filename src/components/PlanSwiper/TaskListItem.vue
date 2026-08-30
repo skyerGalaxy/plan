@@ -11,6 +11,7 @@
   import LoopRuleModal from './LoopRuleModal.vue';
   import { ref } from 'vue';
   import { getRepository } from '@/api';
+  import { message } from 'ant-design-vue';
   import { useRouter } from 'vue-router';
 
   const router = useRouter();
@@ -33,33 +34,26 @@
   const handleMenuClick = async ({ key }: { key: string }) => {
     switch (key) {
       case 'delete':
-        // 处理删除任务（软删除，含子孙任务）
+        // 处理删除任务：仅删除自身及子孙中未执行的任务，已执行的予以保留
         try {
-          await getRepository().deleteTask(props.item.id);
-          emit('delete-task', props.item.id);
-          switch (planStore.cycleValue) {
-            case 1:
-              planStore.isQuarterDataChanged = true;
-              break;
-            case 2:
-              planStore.isMonthDataChanged = true;
-              break;
-            case 3:
-              planStore.isWeekDataChanged = true;
-              break;
-            case 4:
-              planStore.isDayDataChanged = true;
-              break;
+          const result = await getRepository().deleteTask(props.item.id);
+          if (result.blocked.length > 0) {
+            message.warning(
+              `已删除${result.deleted.length}个任务，另有${result.blocked.length}个任务因已执行（存在番茄记录）被保留`
+            );
+          } else {
+            message.success(`已删除${result.deleted.length}个任务`);
           }
-        } catch (error) {
+          // 更新当前视图及下层视图（后续各视图均按需重新拉取）
+          planStore.isQuarterDataChanged = true;
+          planStore.isMonthDataChanged = true;
+          planStore.isWeekDataChanged = true;
+          planStore.isDayDataChanged = true;
+          emit('delete-task', props.item.id);
+        } catch (error: any) {
           console.log('删除任务失败:', error);
+          message.error(error?.message || '删除任务失败');
         }
-        break;
-      case 'focus':
-        // 处理开始专注
-        break;
-      case 'flag':
-        // 处理添加标记
         break;
     }
   };
@@ -75,9 +69,10 @@
     loopOpen.value = true;
   };
 
-  // 标记当前视图数据已变更，触发 store 刷新
+  // 标记数据已变更，触发 store 刷新。按任务自身层级标记，
+  // 保证在子视图修改继承的上级循环任务也能正确联动刷新。
   const markDataChanged = () => {
-    switch (planStore.cycleValue) {
+    switch (props.item.period_type) {
       case 1:
         planStore.isQuarterDataChanged = true;
         break;
@@ -86,6 +81,9 @@
         break;
       case 3:
         planStore.isWeekDataChanged = true;
+        break;
+      case 4:
+        planStore.isDayDataChanged = true;
         break;
     }
   };
@@ -107,99 +105,85 @@
 
 <template>
   <template v-if="planStore.cycleValue === 4">
-    <a-list-item>
-      <template #actions>
-        <div class="task-actions">
-          <div class="actions-container">
-            <RangeButton :range="props.item.sort_order" :disable="true" />
-            <PomodoroCounter
-              :total-pomodoro="props.item.total_pomodoro_quota"
-              :finishedPomodoro="props.item.finished_pomodoro"
-              readonly
-            />
+    <a-dropdown
+      v-model:open="dropdownVisible"
+      :trigger="['contextmenu']"
+      :trigger-on-click="false"
+      placement="bottomLeft"
+      class="full-width"
+    >
+      <a-list-item class="task-card" @click="handleOpenModal">
+        <template #actions>
+          <div class="task-actions">
+            <div class="actions-container">
+              <RangeButton :range="props.item.sort_order" :disable="true" />
+              <PomodoroCounter
+                :total-pomodoro="props.item.total_pomodoro_quota"
+                :finishedPomodoro="props.item.finished_pomodoro"
+                readonly
+              />
+            </div>
           </div>
-        </div>
-      </template>
-      <a-list-item-meta>
-        <template #title>
-          <a-dropdown
-            v-model:open="dropdownVisible"
-            :trigger="['contextmenu']"
-            :trigger-on-click="false"
-            placement="bottomLeft"
-          >
-            <div @click="handleOpenModal" class="task-title">
+        </template>
+        <a-list-item-meta>
+          <template #title>
+            <div class="task-title">
               <span class="title-text">{{ props.item.title }}</span>
             </div>
-            <template #overlay>
-              <a-menu @click="handleMenuClick">
-                <a-menu-item key="delete">
-                  <span class="icon">🗑️</span>
-                  删除任务
-                </a-menu-item>
-                <a-menu-item key="focus">
-                  <span class="icon">⏱️</span>
-                  开始专注
-                </a-menu-item>
-                <a-menu-item key="flag">
-                  <span class="icon">🚩</span>
-                  添加标记
-                </a-menu-item>
-              </a-menu>
-            </template>
-          </a-dropdown>
-        </template>
-        <template #avatar>
-          <a-avatar
-            @click="
-              router.push(
-                `/pomodoro/${props.item.id}/${encodeURIComponent(props.item.title)}/${props.item.total_pomodoro_quota}`
-              )
-            "
-          >
-            <PlayCircleTwoTone twoToneColor="#52c41a" style="font-size: 20px" />
-          </a-avatar>
-        </template>
-      </a-list-item-meta>
-    </a-list-item>
+          </template>
+          <template #avatar>
+            <a-avatar
+              @click.stop="
+                router.push(
+                  `/pomodoro/${props.item.id}/${encodeURIComponent(props.item.title)}/${props.item.total_pomodoro_quota}`
+                )
+              "
+            >
+              <PlayCircleTwoTone twoToneColor="#52c41a" style="font-size: 20px" />
+            </a-avatar>
+          </template>
+        </a-list-item-meta>
+      </a-list-item>
+      <template #overlay>
+        <a-menu @click="handleMenuClick">
+          <a-menu-item key="delete">
+            <span class="icon">🗑️</span>
+            删除任务
+          </a-menu-item>
+        </a-menu>
+      </template>
+    </a-dropdown>
   </template>
   <template v-else>
-    <!-- 类似地修改另一个模板部分 -->
-    <a-list-item>
-      <a-list-item-meta>
-        <template #title>
-          <a-dropdown
-            v-model:open="dropdownVisible"
-            :trigger="['contextmenu']"
-            placement="bottomCenter"
-          >
-            <div @click="handleOpenModal" class="task-content">
+    <a-dropdown
+      v-model:open="dropdownVisible"
+      :trigger="['contextmenu']"
+      :trigger-on-click="false"
+      placement="bottomCenter"
+      class="full-width"
+    >
+      <a-list-item class="task-card" @click="handleOpenModal">
+        <a-list-item-meta>
+          <template #title>
+            <div class="task-content">
               <span style="margin-right: auto">{{ props.item.title }}</span>
               <span v-if="props.item.is_cyclic === 1" class="loop-icon" @click.stop="openLoopRule">
                 <SyncOutlined />
               </span>
               <RangeButton :range="props.item.sort_order" :disable="true" />
             </div>
-            <template #overlay>
-              <a-menu @click="handleMenuClick">
-                <a-menu-item key="delete">
-                  <span class="icon">🗑️</span>
-                  删除任务
-                </a-menu-item>
-                <a-menu-item key="focus">
-                  <span class="icon">⏱️</span>
-                  开始专注
-                </a-menu-item>
-                <a-menu-item key="flag">
-                  <span class="icon">🚩</span>
-                  添加标记
-                </a-menu-item>
-              </a-menu>
-            </template>
-          </a-dropdown>
-        </template>
-      </a-list-item-meta>
-    </a-list-item>
+          </template>
+        </a-list-item-meta>
+      </a-list-item>
+      <template #overlay>
+        <a-menu @click="handleMenuClick">
+          <a-menu-item key="delete">
+            <span class="icon">🗑️</span>
+            删除任务
+          </a-menu-item>
+        </a-menu>
+      </template>
+    </a-dropdown>
   </template>
 
   <LoopRuleModal
@@ -212,6 +196,14 @@
 </template>
 
 <style scoped>
+  .full-width {
+    width: 100%;
+  }
+
+  .task-card {
+    cursor: pointer;
+  }
+
   .task-actions {
     display: flex;
     justify-content: flex-end;

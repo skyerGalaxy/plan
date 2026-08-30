@@ -10,7 +10,15 @@
   import { usePlanerStore } from '@/stores/planStore';
   const modules = [EffectCoverflow, Pagination];
 
-  import { quarterRange, monthRange, weekRange, dayRange, overlapsRange, type Task } from '@/api';
+  import {
+    quarterRange,
+    monthRange,
+    weekRange,
+    dayRange,
+    overlapsRange,
+    countRuleOccurrences,
+    type Task,
+  } from '@/api';
   import { getWeekDateRange, countWorkdaysInWeek, getDayTypeInfo } from '@/utils/holiday';
 
   const planStore = usePlanerStore();
@@ -20,12 +28,10 @@
 
   const key = ref(`${planStore.cycleValue}-${planStore.year}`);
 
-  const isLoading = ref(false);
-
   // 当前视图数据（store 为唯一数据源，直接响应式引用）
   const currentData = computed<Task[]>(() => planStore.currentData);
 
-  // ---- 变更标志 → 自动刷新当前视图 ----
+  // ---- 变更标志 → 自动刷新（按需加载，避免全量重拉导致界面重构）----
   watch(
     () => [
       planStore.isQuarterDataChanged,
@@ -33,18 +39,28 @@
       planStore.isWeekDataChanged,
       planStore.isDayDataChanged,
     ],
-    async ([q, m, w, d]) => {
-      const changed =
-        (planStore.cycleValue === 1 && q) ||
-        (planStore.cycleValue === 2 && (q || m)) ||
-        (planStore.cycleValue === 3 && (q || m || w)) ||
-        (planStore.cycleValue === 4 && (q || m || w || d));
-      if (!changed) return;
-      isLoading.value = true;
+    async () => {
+      const q = planStore.isQuarterDataChanged;
+      const m = planStore.isMonthDataChanged;
+      const w = planStore.isWeekDataChanged;
+      const d = planStore.isDayDataChanged;
+      if (!(q || m || w || d)) return;
       try {
-        await planStore.refreshCurrent();
+        if (q && m && w && d) {
+          // 删除等跨级操作同时置位四个标志 → 全量刷新保证下级一致
+          await planStore.refreshAll();
+        } else {
+          // 单层增改/改循环规则：只重载被标记的层级
+          const need: number[] = [];
+          if (q) need.push(1);
+          if (m) need.push(2);
+          if (w) need.push(3);
+          if (d) need.push(4);
+          // 保证当前视图层级始终刷新（子视图并入的上级循环任务也依赖其数据）
+          if (!need.includes(planStore.cycleValue)) need.push(planStore.cycleValue);
+          await planStore.refreshSelected(need);
+        }
       } finally {
-        isLoading.value = false;
         planStore.isQuarterDataChanged = false;
         planStore.isMonthDataChanged = false;
         planStore.isWeekDataChanged = false;
@@ -115,10 +131,13 @@
     }
   });
 
-  watch(() => planStore.cycleValue, () => {
-    slideCount.value = planStore.getSlideCount();
-    key.value = `${planStore.cycleValue}-${planStore.year}`;
-  });
+  watch(
+    () => planStore.cycleValue,
+    () => {
+      slideCount.value = planStore.getSlideCount();
+      key.value = `${planStore.cycleValue}-${planStore.year}`;
+    }
+  );
 
   planStore.$subscribe((_, state) => {
     slideCount.value = planStore.getSlideCount();
@@ -184,27 +203,60 @@
   }
 
   // 根据滑块 n 与日期筛出当前 slide 的任务
+  // 子视图（月/周/日）除了本级任务，还按循环规则并入「所有上级」的循环任务：
+  // 月←季；周←季、月；日←季、月、周。仅取在该区间内循环规则有触发的上级循环任务。
+  function cyclicParentTasks(range: { start: string; end: string }): Task[] {
+    // 当前周期类型对应的所有上级任务数据（粒度由小到大）
+    const ancestors: Task[][] =
+      planStore.cycleValue === 2
+        ? [planStore.quarterData]
+        : planStore.cycleValue === 3
+          ? [planStore.quarterData, planStore.monthData]
+          : planStore.cycleValue === 4
+            ? [planStore.quarterData, planStore.monthData, planStore.weekData]
+            : [];
+    return ancestors
+      .flat()
+      .filter(
+        t =>
+          t.is_cyclic &&
+          t.cycle_rule &&
+          countRuleOccurrences(t.cycle_rule, range.start, range.end) > 0
+      );
+  }
+
   const filteredTaskData = computed(() => (n: number, date: string) => {
+    let own: Task[] = [];
+    let inherited: Task[] = [];
     switch (planStore.cycleValue) {
       case 1:
-        return currentData.value.filter((item: Task) =>
+        own = currentData.value.filter(item =>
           overlapsRange(item, quarterRange(planStore.year, n))
         );
+        break;
       case 2:
-        return currentData.value.filter((item: Task) =>
+        own = currentData.value.filter(item =>
           overlapsRange(item, monthRange(planStore.year, monthArray.value[n - 1]))
         );
+        inherited = cyclicParentTasks(monthRange(planStore.year, monthArray.value[n - 1]));
+        break;
       case 3:
-        return currentData.value.filter((item: Task) =>
+        own = currentData.value.filter(item =>
           overlapsRange(item, weekRange(planStore.year, planStore.month, n))
         );
+        inherited = cyclicParentTasks(weekRange(planStore.year, planStore.month, n));
+        break;
       case 4:
-        return currentData.value.filter((item: Task) => overlapsRange(item, dayRange(date)));
+        own = currentData.value.filter(item => overlapsRange(item, dayRange(date)));
+        inherited = cyclicParentTasks(dayRange(date));
+        break;
       default:
-        return currentData.value.filter((item: Task) =>
+        own = currentData.value.filter(item =>
           overlapsRange(item, quarterRange(planStore.year, n))
         );
+        break;
     }
+    return [...own, ...inherited];
   });
 </script>
 
@@ -237,7 +289,6 @@
       :class="{ 'disabled-area': activeIndex !== n - 1 }"
     >
       <ListView
-        v-if="!isLoading"
         :slideDate="slideDateArray[n - 1]"
         :taskData="filteredTaskData(n, slideDateArray[n - 1])"
         :dateRange="slideMetaArray[n - 1]?.dateRange"

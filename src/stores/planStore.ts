@@ -172,6 +172,26 @@ export const usePlanerStore = defineStore('planer', () => {
     }
   }
 
+  /** 全量刷新四个视图数据（删除等会影响下级的操作后使用） */
+  async function refreshAll() {
+    loading.value = true;
+    try {
+      await Promise.all([loadPeriod(1), loadPeriod(2), loadPeriod(3), loadPeriod(4)]);
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  /** 按需刷新：仅重载指定层级数据（增改、修改循环规则等单层操作时使用，避免全量重拉） */
+  async function refreshSelected(periods: number[]) {
+    loading.value = true;
+    try {
+      await Promise.all([...new Set(periods)].map(p => loadPeriod(p)));
+    } finally {
+      loading.value = false;
+    }
+  }
+
   // 跨年切换时全量重新加载四个视图数据
   watch(yearChange, async v => {
     if (v) {
@@ -206,6 +226,8 @@ export const usePlanerStore = defineStore('planer', () => {
     isQuarterDataChanged,
     loading,
     refreshCurrent,
+    refreshAll,
+    refreshSelected,
     init,
   };
 });

@@ -9,7 +9,9 @@ export type TaskStatus = 'pending' | 'in_progress' | 'completed';
 /** tasks 表实体（period_type：1季 2月 3周 4日）；主键为 UUID 字符串，云端与本地一致 */
 export interface Task {
   id: string;
-  parent_id: string | null; // 父任务：月→季、周→月、日→周；季任务为 null
+  quarter_id: string | null; // 所属季任务 id（季任务为 null）
+  month_id: string | null; // 所属月任务 id（季/月任务为 null）
+  week_id: string | null; // 所属周任务 id（季/月/周任务为 null）
   title: string;
   description: string;
   period_type: 1 | 2 | 3 | 4;
@@ -25,9 +27,15 @@ export interface Task {
   deleted_at?: string | null; // 软删除标记
 }
 
-/** 新建任务输入（时间戳由数据库生成；id 为可选，缺省时由数据层生成 UUID 保证云端本地一致） */
-export type NewTask = Partial<Pick<Task, 'id'>> &
-  Omit<Task, 'id' | 'created_at' | 'updated_at' | 'deleted_at'>;
+/**
+ * 新建任务输入（时间戳由数据库生成；id 为可选，缺省时由数据层生成 UUID 保证云端本地一致）。
+ * quarter_id/month_id/week_id 调用方直接传入（由 UI 在选中父任务时解析），未传则为 null。
+ */
+export type NewTask = Partial<Pick<Task, 'id' | 'quarter_id' | 'month_id' | 'week_id'>> &
+  Omit<
+    Task,
+    'id' | 'quarter_id' | 'month_id' | 'week_id' | 'created_at' | 'updated_at' | 'deleted_at'
+  >;
 
 /** pomodoro_records 表实体 */
 export interface PomodoroRecord {
@@ -52,8 +60,6 @@ export interface TaskFilter {
   overlapStart?: string;
   overlapEnd?: string;
   isCyclic?: 0 | 1;
-  /** 精确父任务过滤；传 null 仅匹配根任务 */
-  parentId?: string | null;
   includeDeleted?: boolean;
 }
 
@@ -76,14 +82,21 @@ export interface TaskRepository {
   getTask(id: string): Promise<Task | null>;
   createTask(input: NewTask): Promise<Task>;
   updateTask(id: string, patch: Partial<NewTask>): Promise<Task>;
-  /** 软删除任务（连同其全部子孙任务置 deleted_at） */
-  deleteTask(id: string): Promise<void>;
+  /**
+   * 软删除任务：删除任务自身及其全部子孙中「未执行」的任务（有番茄记录的任务视为已执行，予以保留）。
+   * 返回实际删除的 id 与保留（已执行不可删）的 id。
+   */
+  deleteTask(id: string): Promise<{ deleted: string[]; blocked: string[] }>;
+  /** 返回某任务在层级树中的全部子孙 id（含自身），用于判断删除是否涉及已执行任务 */
+  getTaskSubtreeIds(id: string): Promise<string[]>;
 
   // ---- pomodoro_records ----
   listPomodoroRecords(filter?: PomodoroRecordFilter): Promise<PomodoroRecord[]>;
   createPomodoroRecord(input: NewPomodoroRecord): Promise<PomodoroRecord>;
   /** 统计任务已完成番茄数，返回 { taskId: count } */
   countCompletedPomodoros(taskIds: string[]): Promise<Record<string, number>>;
+  /** 统计任务全部番茄记录数（不限状态）上传是否存在已执行，返回 { taskId: count } */
+  countPomodoroRecords(taskIds: string[]): Promise<Record<string, number>>;
 
   // ---- app_settings ----
   getSetting(key: string): Promise<string | null>;

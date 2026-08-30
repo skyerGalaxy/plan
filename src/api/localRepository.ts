@@ -12,7 +12,9 @@ import { normalizePomodoroRecord, normalizeTask, newId } from './helpers';
 
 /** tasks 表可更新的列白名单（防止动态拼 SQL 注入） */
 const TASK_COLUMNS = new Set([
-  'parent_id',
+  'quarter_id',
+  'month_id',
+  'week_id',
   'title',
   'description',
   'period_type',
@@ -56,13 +58,6 @@ export const localRepository: TaskRepository = {
     if (filter.isCyclic !== undefined) {
       where.push(`is_cyclic = ${ph(params, filter.isCyclic)}`);
     }
-    if (filter.parentId !== undefined) {
-      where.push(
-        filter.parentId === null
-          ? 'parent_id IS NULL'
-          : `parent_id = ${ph(params, filter.parentId)}`
-      );
-    }
     if (filter.overlapStart) {
       where.push(`end_date >= ${ph(params, filter.overlapStart)}`);
     }
@@ -87,7 +82,8 @@ export const localRepository: TaskRepository = {
   async createTask(input: NewTask): Promise<Task> {
     const db = await getDb();
     const params: unknown[] = [];
-    const record = input as Record<string, any>;
+    // 三个上级 id 由调用方（UI）直接传入，缺失则为 null
+    const record: Record<string, any> = { ...(input as Record<string, any>) };
     // id 缺省时生成 UUID，保证云端与本地主键一致
     if (!record.id) record.id = newId();
     const columns = ['id', ...TASK_COLUMNS];
@@ -103,6 +99,7 @@ export const localRepository: TaskRepository = {
   async updateTask(id: string, patch: Partial<NewTask>): Promise<Task> {
     const db = await getDb();
     const params: unknown[] = [];
+    // patch 直接包含三个上级 id（调用方在改父任务时会一并传入），缺失则不更新
     const sets = Object.entries(patch)
       .filter(([key]) => TASK_COLUMNS.has(key))
       .map(([key, value]) => `${key} = ${ph(params, value ?? null)}`);
@@ -114,20 +111,53 @@ export const localRepository: TaskRepository = {
     return normalizeTask(rows[0]);
   },
 
-  async deleteTask(id: string): Promise<void> {
+  async deleteTask(id: string): Promise<{ deleted: string[]; blocked: string[] }> {
     const db = await getDb();
-    // 递归软删除：任务自身 + 全部子孙任务
-    await db.execute(
+    // 计算任务子树（含自身）的已执行情况，删除其中未执行的任务，已执行（有番茄记录）的任务予以保留
+    const subtreeIds = await localRepository.getTaskSubtreeIds(id);
+    const counts = await localRepository.countPomodoroRecords(subtreeIds);
+    const blocked = subtreeIds.filter(tid => (counts[tid] ?? 0) > 0);
+    const deletable = subtreeIds.filter(tid => !(counts[tid] ?? 0));
+
+    if (deletable.length) {
+      const placeholders = deletable.map((_, i) => `$${i + 1}`).join(', ');
+      await db.execute(
+        `UPDATE tasks
+         SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+         WHERE id IN (${placeholders})`,
+        deletable
+      );
+    }
+    return { deleted: deletable, blocked };
+  },
+
+  async getTaskSubtreeIds(id: string): Promise<string[]> {
+    const db = await getDb();
+    const rows = await db.select<{ id: string }[]>(
       `WITH RECURSIVE sub(id) AS (
          SELECT id FROM tasks WHERE id = $1
-         UNION ALL
-         SELECT t.id FROM tasks t JOIN sub s ON t.parent_id = s.id
+         UNION
+         SELECT t.id FROM tasks t JOIN sub s ON t.quarter_id = s.id OR t.month_id = s.id OR t.week_id = s.id
        )
-       UPDATE tasks
-       SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-       WHERE id IN (SELECT id FROM sub)`,
+       SELECT id FROM sub`,
       [id]
     );
+    return rows.map(r => r.id);
+  },
+
+  async countPomodoroRecords(taskIds: string[]): Promise<Record<string, number>> {
+    if (!taskIds.length) return {};
+    const db = await getDb();
+    const placeholders = taskIds.map((_, i) => `$${i + 1}`).join(', ');
+    const rows = await db.select<{ task_id: string; cnt: number }[]>(
+      `SELECT task_id, COUNT(*) AS cnt FROM pomodoro_records
+       WHERE task_id IN (${placeholders})
+       GROUP BY task_id`,
+      taskIds
+    );
+    const result: Record<string, number> = {};
+    for (const row of rows) result[row.task_id] = Number(row.cnt);
+    return result;
   },
 
   async listPomodoroRecords(filter: PomodoroRecordFilter = {}): Promise<PomodoroRecord[]> {

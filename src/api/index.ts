@@ -10,6 +10,7 @@ import type {
 import { localRepository } from './localRepository';
 import { cloudRepository } from './cloudRepository';
 import { newId } from './helpers';
+import dayjs from 'dayjs';
 
 export * from './types';
 export * from './helpers';
@@ -28,7 +29,11 @@ export function isTauri(): boolean {
 const dualRepository: TaskRepository = {
   // ---- tasks（写：云→本地） ----
   async createTask(input: NewTask): Promise<Task> {
-    const withId = { ...input, id: input.id ?? newId() };
+    const id = input.id ?? newId();
+    const withId = { ...input, id };
+    if (withId.period_type === 1) withId.quarter_id ??= id;
+    else if (withId.period_type === 2) withId.month_id ??= id;
+    else if (withId.period_type === 3) withId.week_id ??= id;
     const cloud = await cloudRepository.createTask(withId); // 失败会抛错，下面不再执行
     await localWrite(() => localRepository.createTask(withId));
     return cloud;
@@ -40,9 +45,35 @@ const dualRepository: TaskRepository = {
     return cloud;
   },
 
-  async deleteTask(id: string): Promise<void> {
-    await cloudRepository.deleteTask(id);
+  async deleteTask(id: string): Promise<{ deleted: string[]; blocked: string[] }> {
+    // 循环任务特殊处理：若其自身已有番茄记录，则不可删除（时间不可逆），而是把结束日期改为昨天以停止后续循环
+    const task: Task | null = await readOrLocal(
+      () => cloudRepository.getTask(id),
+      () => localRepository.getTask(id)
+    );
+    if (task?.is_cyclic) {
+      const counts = await readOrLocal(
+        () => cloudRepository.countPomodoroRecords([id]),
+        () => localRepository.countPomodoroRecords([id])
+      );
+      if ((counts[id] ?? 0) > 0) {
+        const yesterday = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
+        await cloudRepository.updateTask(id, { end_date: yesterday });
+        await localWrite(() => localRepository.updateTask(id, { end_date: yesterday }));
+        return { deleted: [], blocked: [id] };
+      }
+    }
+    // 普通（或未执行）任务：仅删除未执行的后代，已执行的子孙予以保留
+    const cloud = await cloudRepository.deleteTask(id);
     await localWrite(() => localRepository.deleteTask(id));
+    return cloud;
+  },
+
+  async getTaskSubtreeIds(id: string): Promise<string[]> {
+    return readOrLocal(
+      () => cloudRepository.getTaskSubtreeIds(id),
+      () => localRepository.getTaskSubtreeIds(id)
+    );
   },
 
   // ---- pomodoro_records（写：云→本地） ----
@@ -61,8 +92,9 @@ const dualRepository: TaskRepository = {
 
   // ---- tasks（读：云端优先，本地回退） ----
   async listTasks(filter?: TaskFilter): Promise<Task[]> {
-    return readOrLocal(() => cloudRepository.listTasks(filter), () =>
-      localRepository.listTasks(filter)
+    return readOrLocal(
+      () => cloudRepository.listTasks(filter),
+      () => localRepository.listTasks(filter)
     );
   },
 
@@ -88,6 +120,13 @@ const dualRepository: TaskRepository = {
     );
   },
 
+  async countPomodoroRecords(taskIds: string[]): Promise<Record<string, number>> {
+    return readOrLocal(
+      () => cloudRepository.countPomodoroRecords(taskIds),
+      () => localRepository.countPomodoroRecords(taskIds)
+    );
+  },
+
   // ---- app_settings（读） ----
   async getSetting(key: string): Promise<string | null> {
     return readOrLocal(
@@ -108,7 +147,10 @@ async function localWrite<T>(run: () => Promise<T>): Promise<void> {
 }
 
 /** 读取：云端优先，云端失败时（Tauri 环境）回退本地 */
-async function readOrLocal<T>(fromCloud: () => Promise<T>, fromLocal: () => Promise<T>): Promise<T> {
+async function readOrLocal<T>(
+  fromCloud: () => Promise<T>,
+  fromLocal: () => Promise<T>
+): Promise<T> {
   try {
     return await fromCloud();
   } catch (e) {

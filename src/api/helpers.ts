@@ -71,6 +71,51 @@ export function overlapsRange(task: Task, range: DateRange): boolean {
   return task.start_date <= range.end && task.end_date >= range.start;
 }
 
+/** Add 到循环计算场景的最大遍历护栏（防止异常日期死循环） */
+const MAX_COUNT_STEPS = 100000;
+
+/**
+ * 计算循环规则在闭区间 [start, end] 内的触发次数（用于循环任务总番茄配额计算）。
+ * 规则与 LoopRuleModal 保持一致：cycle_daily / cycle_workday / cycle_weekend /
+ * cycle_weekly_days{days:1..7} / cycle_monthly_days{days:1..31}；rule 为空视为单次。
+ */
+export function countRuleOccurrences(rule: string | null, start: string, end: string): number {
+  if (!rule) return 1;
+  let type = '';
+  let days: number[] = [];
+  try {
+    const parsed = JSON.parse(rule);
+    type = parsed?.type || '';
+    days = Array.isArray(parsed?.days) ? parsed.days : [];
+  } catch {
+    return 1;
+  }
+  const s = dayjs(start);
+  const e = dayjs(end);
+  if (!s.isValid() || !e.isValid()) return 1;
+
+  if (type === 'cycle_daily') return e.diff(s, 'day') + 1;
+
+  // 周日 = 0，映射与 LoopRuleModal.nextWeeklyDays 一致（周一=1..周六=6、周日=0）
+  const weekdaySet = new Set(days.map(d => d % 7));
+  const monthlySet = new Set(days.filter(d => d >= 1 && d <= 31));
+
+  let count = 0;
+  let day = s;
+  let guard = 0;
+  while ((day.isBefore(e) || day.isSame(e)) && guard++ < MAX_COUNT_STEPS) {
+    const w = day.day();
+    const match =
+      (type === 'cycle_workday' && w >= 1 && w <= 5) ||
+      (type === 'cycle_weekend' && (w === 0 || w === 6)) ||
+      (type === 'cycle_weekly_days' && weekdaySet.has(w)) ||
+      (type === 'cycle_monthly_days' && monthlySet.has(day.date()));
+    if (match) count++;
+    day = day.add(1, 'day');
+  }
+  return count;
+}
+
 /** 生成 UUID v4 字符串（云端与本地主键共用，保证两端一致） */
 export function newId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -89,13 +134,17 @@ export function normalizeTask(row: Record<string, any>): Task {
     total_pomodoro_quota: Number(row.total_pomodoro_quota ?? 0),
     is_cyclic: row.is_cyclic ? 1 : 0,
     sort_order: Number(row.sort_order ?? 0),
-    parent_id: row.parent_id ?? null,
+    quarter_id: row.quarter_id ?? null,
+    month_id: row.month_id ?? null,
+    week_id: row.week_id ?? null,
     cycle_rule: row.cycle_rule ?? null,
     status: row.status || 'pending',
   } as Task;
 }
 
-/** 归一化番茄记录行 */
+/**
+ * 归一化番茄记录行
+ */
 export function normalizePomodoroRecord(row: Record<string, any>) {
   return {
     ...row,

@@ -6,7 +6,7 @@
   import PomodoroCounter from './PomodoroCounter.vue';
   import LoopRuleModal from './LoopRuleModal.vue';
   import { usePlanerStore } from '@/stores/planStore';
-  import { getRepository, getPeriodRange, type NewTask } from '@/api';
+  import { getRepository, getPeriodRange, countRuleOccurrences, type NewTask } from '@/api';
 
   const props = defineProps<{
     operateType: string; //inser on update,decide modalOk function
@@ -33,8 +33,52 @@
   const finishedPomodoo = ref<number>(props.task.finished_pomodoro || 0);
   const rangeValue = ref<number>(props.task.sort_order || 1);
   const parentTaskText = ref<string>('选择父任务');
-  const parentTaskIndex = ref<string | null>(props.task.parent_id ?? null);
+  const parentTaskIndex = ref<string | null>(null);
+  const quarterId = ref<string | null>(null);
+  const monthId = ref<string | null>(null);
+  const weekId = ref<string | null>(null);
   const confirmLoading = ref<boolean>(false);
+
+  /**
+   * 由所选父任务（上一级粒度）解析当前任务的三个上级 id：
+   * - 月(2)：quarter_id = 季任务 id
+   * - 周(3)：month_id = 月任务 id，quarter_id = 父月的 quarter_id
+   * - 日(4)：week_id = 周任务 id，month_id/quarter_id 沿用父周
+   */
+  function resolveIds(periodType: number, task: any) {
+    if (periodType === 2) return { quarter_id: task?.id ?? null, month_id: null, week_id: null };
+    if (periodType === 3)
+      return { quarter_id: task?.quarter_id ?? null, month_id: task?.id ?? null, week_id: null };
+    if (periodType === 4)
+      return {
+        quarter_id: task?.quarter_id ?? null,
+        month_id: task?.month_id ?? null,
+        week_id: task?.id ?? null,
+      };
+    return { quarter_id: null, month_id: null, week_id: null };
+  }
+
+  /** 由任务自身的三个上级 id 反推其直接父任务 id（用于编辑回显） */
+  function parentIdOfTask(task: any): string | null {
+    switch (planStore.cycleValue) {
+      case 2:
+        return task.quarter_id ?? null;
+      case 3:
+        return task.month_id ?? null;
+      case 4:
+        return task.week_id ?? null;
+      default:
+        return null;
+    }
+  }
+
+  function resetParentFields() {
+    parentTaskIndex.value = null;
+    parentTaskText.value = '选择父任务';
+    quarterId.value = null;
+    monthId.value = null;
+    weekId.value = null;
+  }
 
   watch(
     () => props.task,
@@ -48,8 +92,7 @@
         pomodoroCount.value = 0;
         finishedPomodoo.value = 0;
         rangeValue.value = 1;
-        parentTaskText.value = '选择父任务';
-        parentTaskIndex.value = null;
+        resetParentFields();
       } else if (newTask && Object.keys(newTask).length > 0) {
         // Load task data for editing
         taskId.value = newTask.id;
@@ -59,9 +102,23 @@
         pomodoroCount.value = newTask.total_pomodoro_quota || 0;
         finishedPomodoo.value = newTask.finished_pomodoro || 0;
         rangeValue.value = newTask.sort_order || 1;
-        parentTaskIndex.value = newTask.parent_id ?? null;
-        const parentTask = planStore.parentData.find((item: any) => item.id === newTask.parent_id);
+        quarterId.value = newTask.quarter_id ?? null;
+        monthId.value = newTask.month_id ?? null;
+        weekId.value = newTask.week_id ?? null;
+        parentTaskIndex.value = parentIdOfTask(newTask);
+        const parentTask = planStore.parentData.find(
+          (item: any) => item.id === parentTaskIndex.value
+        );
         parentTaskText.value = parentTask ? parentTask.title : '选择父任务';
+        // 编辑循环任务时，番茄计数器显示「单次循环」值 = 总配额 / 周期内循环次数
+        if (newTask.is_cyclic && planStore.cycleValue !== 4 && newTask.cycle_rule) {
+          const occ = countRuleOccurrences(
+            newTask.cycle_rule,
+            newTask.start_date,
+            newTask.end_date
+          );
+          pomodoroCount.value = occ > 0 ? Math.round((newTask.total_pomodoro_quota || 0) / occ) : 0;
+        }
       }
     },
     {
@@ -73,12 +130,31 @@
   function handleMenuClick(task: any) {
     parentTaskText.value = task.title;
     parentTaskIndex.value = task.id;
+    // 选中父任务后解析三个上级 id
+    const ids = resolveIds(planStore.cycleValue, task);
+    quarterId.value = ids.quarter_id;
+    monthId.value = ids.month_id;
+    weekId.value = ids.week_id;
   }
 
   // 循环规则确认后，同步 isLoop 状态
   function onRuleChange(rule: string | null) {
     cycleRule.value = rule;
     isLoop.value = !!rule;
+  }
+
+  /**
+   * 计算本次要写入数据库的总番茄配额：
+   * - 日任务：单次番茄数即总配额
+   * - 循环任务：单次番茄数 × 周期内循环规则触发的次数
+   * - 其他非循环任务：0
+   */
+  function computeTotalQuota(start: string, end: string): number {
+    if (planStore.cycleValue === 4) return pomodoroCount.value;
+    if (isLoop.value) {
+      return pomodoroCount.value * countRuleOccurrences(cycleRule.value, start, end);
+    }
+    return 0;
   }
 
   function modalCancel() {
@@ -90,8 +166,7 @@
     pomodoroCount.value = 0;
     finishedPomodoo.value = 0;
     rangeValue.value = 1;
-    parentTaskText.value = '选择父任务';
-    parentTaskIndex.value = null;
+    resetParentFields();
     confirmLoading.value = false;
   }
 
@@ -152,11 +227,13 @@
     try {
       if (props.operateType === 'insert') {
         const addedTask = await repo.createTask({
-          parent_id: parentTaskIndex.value,
+          quarter_id: quarterId.value,
+          month_id: monthId.value,
+          week_id: weekId.value,
           title: taskValue.value.trim(),
           description: '',
           period_type: planStore.cycleValue as 1 | 2 | 3 | 4,
-          total_pomodoro_quota: planStore.cycleValue === 4 ? pomodoroCount.value : 0,
+          total_pomodoro_quota: computeTotalQuota(periodRange.start, periodRange.end),
           start_date: periodRange.start,
           end_date: periodRange.end,
           is_cyclic: isLoop.value ? 1 : 0,
@@ -169,21 +246,23 @@
       } else if (props.operateType === 'update') {
         const patch: Partial<NewTask> = {
           title: taskValue.value.trim(),
-          parent_id: parentTaskIndex.value,
+          quarter_id: quarterId.value,
+          month_id: monthId.value,
+          week_id: weekId.value,
           sort_order: rangeValue.value,
+          total_pomodoro_quota: computeTotalQuota(periodRange.start, periodRange.end),
           is_cyclic: isLoop.value ? 1 : 0,
           cycle_rule: isLoop.value ? cycleRule.value : null,
         };
-        if (planStore.cycleValue === 4) {
-          patch.total_pomodoro_quota = pomodoroCount.value;
-        }
         const updatedTask = await repo.updateTask(taskId.value, patch);
         emit('task-updated', updatedTask);
         openNotificationWithIcon('success');
       }
 
-      // 标记数据变化，触发对应视图重新加载
-      switch (planStore.cycleValue) {
+      // 标记数据变化，触发对应视图重新加载。
+      // 更新时按任务"自身的层级"而非当前视图标记，保证在子视图编辑继承的上级循环任务时也能正确联动。
+      const taskLevel = props.operateType === 'insert' ? planStore.cycleValue : props.task.period_type;
+      switch (taskLevel) {
         case 1:
           planStore.isQuarterDataChanged = true;
           break;
@@ -238,7 +317,7 @@
         >
           <SyncOutlined />
         </span>
-        <a-dropdown v-if="planStore.cycleValue !== 1">
+        <a-dropdown v-if="planStore.cycleValue !== 1 && !isLoop">
           <template #overlay>
             <a-menu
               :selected-keys="[parentTaskText.toString()]"
@@ -272,7 +351,7 @@
             <DownOutlined :style="{ 'padding-top': '5px' }" />
           </a-button>
         </a-dropdown>
-        <div class="rate-container" v-if="planStore.cycleValue == 4">
+        <div class="rate-container" v-if="isLoop || planStore.cycleValue == 4">
           <PomodoroCounter
             v-model:totalPomodoro="pomodoroCount"
             :finishedPomodoro="finishedPomodoo"
