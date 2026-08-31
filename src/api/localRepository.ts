@@ -19,6 +19,7 @@ const TASK_COLUMNS = new Set([
   'description',
   'period_type',
   'total_pomodoro_quota',
+  'pomodoro_per_occurrence',
   'start_date',
   'end_date',
   'is_cyclic',

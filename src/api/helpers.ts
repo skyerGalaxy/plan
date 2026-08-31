@@ -132,6 +132,7 @@ export function normalizeTask(row: Record<string, any>): Task {
     ...row,
     period_type: Number(row.period_type),
     total_pomodoro_quota: Number(row.total_pomodoro_quota ?? 0),
+    pomodoro_per_occurrence: Number(row.pomodoro_per_occurrence ?? 0),
     is_cyclic: row.is_cyclic ? 1 : 0,
     sort_order: Number(row.sort_order ?? 0),
     quarter_id: row.quarter_id ?? null,

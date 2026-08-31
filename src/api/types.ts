@@ -15,7 +15,8 @@ export interface Task {
   title: string;
   description: string;
   period_type: 1 | 2 | 3 | 4;
-  total_pomodoro_quota: number; // 番茄配额（日任务使用）
+  total_pomodoro_quota: number; // 番茄总配额（日任务=单次；循环任务=单次×触发次数；其他为 0）
+  pomodoro_per_occurrence: number; // 单次任务所需番茄数（仅循环任务使用；非循环任务恒为 0）
   start_date: string; // YYYY-MM-DD，周期开始日
   end_date: string; // YYYY-MM-DD，周期结束日
   is_cyclic: 0 | 1; // 是否循环任务

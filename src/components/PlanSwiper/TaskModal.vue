@@ -110,14 +110,18 @@
           (item: any) => item.id === parentTaskIndex.value
         );
         parentTaskText.value = parentTask ? parentTask.title : '选择父任务';
-        // 编辑循环任务时，番茄计数器显示「单次循环」值 = 总配额 / 周期内循环次数
+        // 编辑循环任务时，番茄计数器显示「单次循环」番茄数：优先用已存单次值；旧数据回退为 总配额/触发次数
         if (newTask.is_cyclic && planStore.cycleValue !== 4 && newTask.cycle_rule) {
-          const occ = countRuleOccurrences(
-            newTask.cycle_rule,
-            newTask.start_date,
-            newTask.end_date
-          );
-          pomodoroCount.value = occ > 0 ? Math.round((newTask.total_pomodoro_quota || 0) / occ) : 0;
+          pomodoroCount.value = newTask.pomodoro_per_occurrence;
+          if (!newTask.pomodoro_per_occurrence) {
+            const occ = countRuleOccurrences(
+              newTask.cycle_rule,
+              newTask.start_date,
+              newTask.end_date
+            );
+            pomodoroCount.value =
+              occ > 0 ? Math.round((newTask.total_pomodoro_quota || 0) / occ) : 0;
+          }
         }
       }
     },
@@ -234,6 +238,7 @@
           description: '',
           period_type: planStore.cycleValue as 1 | 2 | 3 | 4,
           total_pomodoro_quota: computeTotalQuota(periodRange.start, periodRange.end),
+          pomodoro_per_occurrence: isLoop.value ? pomodoroCount.value : 0,
           start_date: periodRange.start,
           end_date: periodRange.end,
           is_cyclic: isLoop.value ? 1 : 0,
@@ -251,6 +256,7 @@
           week_id: weekId.value,
           sort_order: rangeValue.value,
           total_pomodoro_quota: computeTotalQuota(periodRange.start, periodRange.end),
+          pomodoro_per_occurrence: isLoop.value ? pomodoroCount.value : 0,
           is_cyclic: isLoop.value ? 1 : 0,
           cycle_rule: isLoop.value ? cycleRule.value : null,
         };
@@ -261,7 +267,8 @@
 
       // 标记数据变化，触发对应视图重新加载。
       // 更新时按任务"自身的层级"而非当前视图标记，保证在子视图编辑继承的上级循环任务时也能正确联动。
-      const taskLevel = props.operateType === 'insert' ? planStore.cycleValue : props.task.period_type;
+      const taskLevel =
+        props.operateType === 'insert' ? planStore.cycleValue : props.task.period_type;
       switch (taskLevel) {
         case 1:
           planStore.isQuarterDataChanged = true;

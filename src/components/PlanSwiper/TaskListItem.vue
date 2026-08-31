@@ -10,7 +10,7 @@
   import PomodoroCounter from './PomodoroCounter.vue';
   import LoopRuleModal from './LoopRuleModal.vue';
   import { ref } from 'vue';
-  import { getRepository } from '@/api';
+  import { getRepository, countRuleOccurrences } from '@/api';
   import { message } from 'ant-design-vue';
   import { useRouter } from 'vue-router';
 
@@ -27,7 +27,8 @@
   const emit = defineEmits(['open-modal', 'delete-task']);
 
   const handleOpenModal = () => {
-    console.log('open modal');
+    // 循环任务只能删除，禁止打开编辑弹窗
+    if (props.item.is_cyclic === 1) return;
     emit('open-modal', props.item);
   };
 
@@ -92,9 +93,19 @@
   const onLoopRuleChange = async (rule: string | null) => {
     loopRule.value = rule;
     try {
+      // 修改循环规则后，同步重算总番茄配额 = 单次番茄数 × 新规则在任务周期内触发次数
+      const occurrenceCount = countRuleOccurrences(
+        rule,
+        props.item.start_date,
+        props.item.end_date
+      );
       await getRepository().updateTask(props.item.id, {
         is_cyclic: rule ? 1 : 0,
         cycle_rule: rule,
+        pomodoro_per_occurrence: rule ? props.item.pomodoro_per_occurrence || 0 : 0,
+        total_pomodoro_quota: rule
+          ? (props.item.pomodoro_per_occurrence || 0) * occurrenceCount
+          : 0,
       });
       markDataChanged();
     } catch (error) {
@@ -118,7 +129,11 @@
             <div class="actions-container">
               <RangeButton :range="props.item.sort_order" :disable="true" />
               <PomodoroCounter
-                :total-pomodoro="props.item.total_pomodoro_quota"
+                :total-pomodoro="
+                  props.item.is_cyclic === 1
+                    ? props.item.pomodoro_per_occurrence || props.item.total_pomodoro_quota
+                    : props.item.total_pomodoro_quota
+                "
                 :finishedPomodoro="props.item.finished_pomodoro"
                 readonly
               />
@@ -129,6 +144,9 @@
           <template #title>
             <div class="task-title">
               <span class="title-text">{{ props.item.title }}</span>
+              <span v-if="props.item.is_cyclic === 1" class="loop-icon" @click.stop="openLoopRule">
+                <SyncOutlined />
+              </span>
             </div>
           </template>
           <template #avatar>
@@ -189,8 +207,9 @@
   <LoopRuleModal
     v-model:open="loopOpen"
     :rule="loopRule"
-    :period-type="planStore.cycleValue"
+    :period-type="props.item.period_type || planStore.cycleValue"
     :start-date="props.item.start_date"
+    readonly
     @update:rule="onLoopRuleChange"
   />
 </template>

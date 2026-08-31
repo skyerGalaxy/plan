@@ -23,6 +23,7 @@
     rule: string | null;
     periodType: number; // 1 季 2 月 3 周 4 日（对应 tasks.period_type）
     startDate: string;
+    readonly?: boolean; // 只读展示模式：循环任务仅可查看循环规则，不可编辑
   }>();
 
   const emit = defineEmits<{
@@ -327,6 +328,7 @@
     title="循环规则"
     ok-text="确定"
     cancel-text="取消"
+    :footer="readonly ? null : undefined"
     @update:open="(val: boolean) => emit('update:open', val)"
     @cancel="handleCancel"
     @ok="handleOk"
@@ -340,8 +342,8 @@
     <div class="type-grid">
       <div
         class="type-card"
-        :class="{ active: selectedType === 'none' }"
-        @click="selectedType = 'none'"
+        :class="{ active: selectedType === 'none', readonly }"
+        @click="!readonly && (selectedType = 'none')"
       >
         <span class="type-icon">🚫</span>
         <span class="type-name">不循环</span>
@@ -352,8 +354,8 @@
         v-show="allowedTypes.includes(opt.type)"
         :key="opt.type"
         class="type-card"
-        :class="{ active: selectedType === opt.type }"
-        @click="selectedType = opt.type"
+        :class="{ active: selectedType === opt.type, readonly }"
+        @click="!readonly && (selectedType = opt.type)"
       >
         <span class="type-icon">{{ opt.icon }}</span>
         <span class="type-name">{{ opt.title }}</span>
@@ -372,8 +374,8 @@
             :key="w.value"
             type="button"
             class="week-btn"
-            :class="{ active: weeklyDays.includes(w.value) }"
-            @click="toggleIn(weeklyDays, w.value)"
+            :class="{ active: weeklyDays.includes(w.value), disabled: readonly }"
+            @click="!readonly && toggleIn(weeklyDays, w.value)"
           >
             {{ w.label }}
           </button>
@@ -389,8 +391,8 @@
             :key="d"
             type="button"
             class="day-btn"
-            :class="{ active: monthlyDays.includes(d) }"
-            @click="toggleIn(monthlyDays, d)"
+            :class="{ active: monthlyDays.includes(d), disabled: readonly }"
+            @click="!readonly && toggleIn(monthlyDays, d)"
           >
             {{ d }}
           </button>
@@ -436,6 +438,10 @@
     border-color: #1677ff;
     background: rgba(22, 119, 255, 0.06);
     box-shadow: 0 0 0 1px #1677ff;
+  }
+
+  .type-card.readonly {
+    cursor: default;
   }
 
   .type-icon {
@@ -497,6 +503,12 @@
     border-color: #1677ff;
     background: #1677ff;
     color: #fff;
+  }
+
+  .week-btn.disabled,
+  .day-btn.disabled {
+    cursor: default;
+    opacity: 0.7;
   }
 
   .day-grid {

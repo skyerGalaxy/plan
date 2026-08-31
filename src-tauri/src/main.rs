@@ -206,6 +206,15 @@ fn migrations() -> Vec<Migration> {
             CREATE INDEX IF NOT EXISTS idx_pomodoro_task_status_date ON pomodoro_records(task_id, status, record_date);",
             kind: MigrationKind::Up,
         },
+        // v5：为 tasks 增加「单次任务番茄数」列 pomodoro_per_occurrence（仅循环任务使用）。
+        // 循环任务记录单次所需番茄数，总配额 total_pomodoro_quota 由「单次×触发次数」派生。
+        // SQLite 用 ADD COLUMN 即可安全加列，不影响既有外键/约束。
+        Migration {
+            version: 5,
+            description: "add_pomodoro_per_occurrence",
+            sql: "ALTER TABLE tasks ADD COLUMN pomodoro_per_occurrence INTEGER NOT NULL DEFAULT 0;",
+            kind: MigrationKind::Up,
+        },
     ]
 }
 
