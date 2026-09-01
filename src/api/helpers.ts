@@ -1,7 +1,7 @@
 import dayjs from 'dayjs';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 import { getWeekDateRange } from '@/utils/holiday';
-import type { Task } from './types';
+import type { PomoSchedule, Task } from './types';
 
 dayjs.extend(quarterOfYear);
 
@@ -143,13 +143,21 @@ export function normalizeTask(row: Record<string, any>): Task {
   } as Task;
 }
 
-/**
- * 归一化番茄记录行
- */
+/** 归一化番茄记录行 */
 export function normalizePomodoroRecord(row: Record<string, any>) {
   return {
     ...row,
     duration_minutes: Number(row.duration_minutes ?? 0),
     end_time: row.end_time ?? null,
   };
+}
+
+/** 归一化 user_pomo_schedule 行（SQLite/Supabase 数值类型差异） */
+export function normalizePomoSchedule(row: Record<string, any>): PomoSchedule {
+  return {
+    ...row,
+    pomodoro_work_minutes: Number(row.pomodoro_work_minutes ?? 0),
+    daily_pomo_count: Number(row.daily_pomo_count ?? 0),
+    end_date: row.end_date ?? null,
+  } as PomoSchedule;
 }

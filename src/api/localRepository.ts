@@ -4,11 +4,13 @@ import type {
   NewTask,
   PomodoroRecord,
   PomodoroRecordFilter,
+  PomoSchedule,
   Task,
   TaskFilter,
   TaskRepository,
 } from './types';
-import { normalizePomodoroRecord, normalizeTask, newId } from './helpers';
+import { normalizePomodoroRecord, normalizePomoSchedule, normalizeTask, newId } from './helpers';
+import dayjs from 'dayjs';
 
 /** tasks 表可更新的列白名单（防止动态拼 SQL 注入） */
 const TASK_COLUMNS = new Set([
@@ -237,5 +239,34 @@ export const localRepository: TaskRepository = {
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP`,
       [key, value]
     );
+  },
+
+  // ---- user_pomo_schedule ----
+  async getActivePomoSchedule(): Promise<PomoSchedule | null> {
+    const db = await getDb();
+    const rows = await db.select<Record<string, any>[]>(
+      'SELECT * FROM user_pomo_schedule WHERE end_date IS NULL ORDER BY start_date DESC LIMIT 1'
+    );
+    return rows.length ? normalizePomoSchedule(rows[0]) : null;
+  },
+
+  async savePomoSchedule(input: {
+    pomodoro_work_minutes: number;
+    daily_pomo_count: number;
+  }): Promise<PomoSchedule> {
+    const db = await getDb();
+    const today = dayjs().format('YYYY-MM-DD');
+    const yesterday = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
+    // 关闭当前生效段（end_date 置为昨日）
+    await db.execute('UPDATE user_pomo_schedule SET end_date = $1 WHERE end_date IS NULL', [
+      yesterday,
+    ]);
+    // 新增从今天起生效的新段
+    const rows = await db.select<Record<string, any>[]>(
+      `INSERT INTO user_pomo_schedule (id, start_date, end_date, pomodoro_work_minutes, daily_pomo_count)
+       VALUES ($1, $2, NULL, $3, $4) RETURNING *`,
+      [newId(), today, input.pomodoro_work_minutes, input.daily_pomo_count]
+    );
+    return normalizePomoSchedule(rows[0]);
   },
 };

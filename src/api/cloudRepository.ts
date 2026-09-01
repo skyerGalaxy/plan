@@ -4,11 +4,13 @@ import type {
   NewTask,
   PomodoroRecord,
   PomodoroRecordFilter,
+  PomoSchedule,
   Task,
   TaskFilter,
   TaskRepository,
 } from './types';
-import { normalizePomodoroRecord, normalizeTask, newId } from './helpers';
+import { normalizePomodoroRecord, normalizePomoSchedule, normalizeTask, newId } from './helpers';
+import dayjs from 'dayjs';
 
 /**
  * 云端 Supabase 仓库：与本地 SQLite 同构的三张表（tasks / pomodoro_records / app_settings）。
@@ -50,6 +52,16 @@ import { normalizePomodoroRecord, normalizeTask, newId } from './helpers';
  *   value text not null,
  *   updated_at timestamptz not null default now()
  * );
+ * create table if not exists user_pomo_schedule (
+ *   id uuid primary key default gen_random_uuid(),
+ *   start_date date not null,
+ *   end_date date,
+ *   pomodoro_work_minutes int not null,
+ *   daily_pomo_count int not null,
+ *   created_at timestamptz not null default now()
+ * );
+ * create index if not exists idx_user_pomo_schedule_start_end
+ *   on user_pomo_schedule(start_date, end_date);
  */
 
 const supabase = createClient(
@@ -258,5 +270,47 @@ export const cloudRepository: TaskRepository = {
       .from('app_settings')
       .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
     if (error) throw error;
+  },
+
+  // ---- user_pomo_schedule ----
+  async getActivePomoSchedule(): Promise<PomoSchedule | null> {
+    const { data, error } = await supabase
+      .from('user_pomo_schedule')
+      .select('*')
+      .is('end_date', null)
+      .order('start_date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return data ? normalizePomoSchedule(data) : null;
+  },
+
+  async savePomoSchedule(input: {
+    pomodoro_work_minutes: number;
+    daily_pomo_count: number;
+  }): Promise<PomoSchedule> {
+    const today = dayjs().format('YYYY-MM-DD');
+    const yesterday = dayjs().subtract(1, 'day').format('YYYY-MM-DD');
+    // 关闭当前生效段（end_date 置为昨日）
+    const { error: closeError } = await supabase
+      .from('user_pomo_schedule')
+      .update({ end_date: yesterday })
+      .is('end_date', null);
+    if (closeError) throw closeError;
+    // 新增从今天起生效的新段
+    const insert = {
+      id: newId(),
+      start_date: today,
+      end_date: null,
+      pomodoro_work_minutes: input.pomodoro_work_minutes,
+      daily_pomo_count: input.daily_pomo_count,
+    };
+    const { data, error } = await supabase
+      .from('user_pomo_schedule')
+      .insert(insert)
+      .select()
+      .single();
+    if (error) throw error;
+    return normalizePomoSchedule(data);
   },
 };

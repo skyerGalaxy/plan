@@ -73,6 +73,19 @@ export interface PomodoroRecordFilter {
 }
 
 /**
+ * user_pomo_schedule 表实体：某时间段内用户的番茄钟配置（每日数量 + 专注时长）。
+ * start_date 为生效起始日；end_date 为失效日，NULL 表示当前生效段。
+ */
+export interface PomoSchedule {
+  id: string;
+  start_date: string; // YYYY-MM-DD
+  end_date: string | null; // YYYY-MM-DD；null 表示当前生效段
+  pomodoro_work_minutes: number; // 番茄专注时长（分钟）
+  daily_pomo_count: number; // 每日番茄钟数量
+  created_at?: string;
+}
+
+/**
  * 三表统一的增删改查仓库接口。
  * localRepository（Tauri + SQLite）与 cloudRepository（Supabase）各实现一份，
  * UI 只依赖此接口，不感知底层存储。
@@ -102,4 +115,16 @@ export interface TaskRepository {
   // ---- app_settings ----
   getSetting(key: string): Promise<string | null>;
   setSetting(key: string, value: string): Promise<void>;
+
+  // ---- user_pomo_schedule ----
+  /** 获取当前生效的番茄钟配置段（end_date IS NULL）；无记录返回 null */
+  getActivePomoSchedule(): Promise<PomoSchedule | null>;
+  /**
+   * 保存新的番茄钟配置段：关闭当前生效段（end_date 置为昨日）并新增从今天开始的新段。
+   * 用于用户修改每日数量/专注时长时按时间段留档。
+   */
+  savePomoSchedule(input: {
+    pomodoro_work_minutes: number;
+    daily_pomo_count: number;
+  }): Promise<PomoSchedule>;
 }

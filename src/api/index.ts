@@ -1,4 +1,5 @@
 import type {
+  PomoSchedule,
   Task,
   TaskFilter,
   TaskRepository,
@@ -90,6 +91,16 @@ const dualRepository: TaskRepository = {
     await localWrite(() => localRepository.setSetting(key, value));
   },
 
+  // ---- user_pomo_schedule（写：云→本地） ----
+  async savePomoSchedule(input: {
+    pomodoro_work_minutes: number;
+    daily_pomo_count: number;
+  }): Promise<PomoSchedule> {
+    const cloud = await cloudRepository.savePomoSchedule(input);
+    await localWrite(() => localRepository.savePomoSchedule(input));
+    return cloud;
+  },
+
   // ---- tasks（读：云端优先，本地回退） ----
   async listTasks(filter?: TaskFilter): Promise<Task[]> {
     return readOrLocal(
@@ -132,6 +143,14 @@ const dualRepository: TaskRepository = {
     return readOrLocal(
       () => cloudRepository.getSetting(key),
       () => localRepository.getSetting(key)
+    );
+  },
+
+  // ---- user_pomo_schedule（读：云端优先，本地回退） ----
+  async getActivePomoSchedule(): Promise<PomoSchedule | null> {
+    return readOrLocal(
+      () => cloudRepository.getActivePomoSchedule(),
+      () => localRepository.getActivePomoSchedule()
     );
   },
 };

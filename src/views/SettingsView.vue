@@ -1,14 +1,128 @@
 <script setup lang="ts">
-  import { ref, onMounted } from 'vue';
+  import { ref, reactive, computed, onMounted } from 'vue';
   import { useSettingsStore } from '@/stores/settingsStore';
-  import { SettingOutlined, ClockCircleOutlined, InfoCircleOutlined } from '@ant-design/icons-vue';
+  import {
+    SettingOutlined,
+    ClockCircleOutlined,
+    InfoCircleOutlined,
+    QuestionCircleOutlined,
+    ReloadOutlined,
+    SaveOutlined,
+  } from '@ant-design/icons-vue';
+  import { message } from 'ant-design-vue';
+  import dayjs from 'dayjs';
 
   const settings = useSettingsStore();
 
   const activeKey = ref<string>('general');
+  const saving = ref(false);
 
-  onMounted(() => {
-    settings.load();
+  // 番茄钟表单本地草稿：修改后仅停留在草稿，点击「保存修改」才落库
+  const pomoForm = reactive({
+    dailyPomodoroCount: 8, // 每日专注目标（user_pomo_schedule）
+    workMinutes: 25, // 专注时长（分钟，user_pomo_schedule）
+    shortBreakMinutes: 5, // 短休息时长（app_settings）
+    longBreakMinutes: 15, // 长休息时长（app_settings）
+    longBreakInterval: 4, // 长休息间隔（app_settings）
+    autoStartBreak: true, // 自动开始休息（app_settings）
+    forceBreakScreen: true, // 强制休息界面（app_settings）
+    autoStartWork: false, // 自动开始专注（app_settings）
+    workStartReminder: false, // 专注开始提醒（app_settings）
+  });
+  // 已保存快照：用于脏检查与重置
+  const pomoOriginal = ref<Record<string, unknown>>({});
+
+  const pomoDirty = computed(() =>
+    (Object.keys(pomoForm) as (keyof typeof pomoForm)[]).some(
+      k => pomoForm[k] !== pomoOriginal.value[k]
+    )
+  );
+
+  // ---- 时间预览 ----
+  const dailyAvailableMinutes = computed(
+    () => (pomoForm.dailyPomodoroCount || 0) * (pomoForm.workMinutes || 0)
+  );
+  const yearlyRemainingMinutes = computed(() => {
+    const today = dayjs();
+    const remainingDays = today.endOf('year').diff(today, 'day') + 1;
+    return remainingDays * dailyAvailableMinutes.value;
+  });
+  const dailyAvailableText = computed(() => formatMinutes(dailyAvailableMinutes.value));
+  const yearlyRemainingText = computed(() => formatMinutes(yearlyRemainingMinutes.value));
+
+  function formatMinutes(min: number): string {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    if (h > 0 && m > 0) return `${h} 小时 ${m} 分钟`;
+    if (h > 0) return `${h} 小时`;
+    return `${m} 分钟`;
+  }
+
+  function snapshotPomo() {
+    pomoOriginal.value = JSON.parse(JSON.stringify(pomoForm));
+  }
+
+  /** 重置：草稿恢复为已保存的原始数据，并立即清理脏值状态 */
+  function resetPomo() {
+    Object.assign(pomoForm, pomoOriginal.value);
+    snapshotPomo();
+  }
+
+  /** 保存：时段配置写入 user_pomo_schedule（关旧段+新增段），其余写入 app_settings */
+  async function savePomo() {
+    if (!pomoDirty.value) return;
+    saving.value = true;
+    try {
+      // 时段配置（每日数量 + 专注时长）仅在实际修改时才生成新配置段
+      const scheduleChanged =
+        pomoForm.dailyPomodoroCount !== pomoOriginal.value.dailyPomodoroCount ||
+        pomoForm.workMinutes !== pomoOriginal.value.workMinutes;
+      if (scheduleChanged) {
+        settings.dailyPomodoroTarget = pomoForm.dailyPomodoroCount;
+        settings.workMinutes = pomoForm.workMinutes;
+        await settings.saveSchedule();
+      }
+      // 全局配置 → app_settings
+      settings.shortBreakMinutes = pomoForm.shortBreakMinutes;
+      settings.longBreakMinutes = pomoForm.longBreakMinutes;
+      settings.longBreakInterval = pomoForm.longBreakInterval;
+      settings.autoStartBreak = pomoForm.autoStartBreak;
+      settings.forceBreakScreen = pomoForm.forceBreakScreen;
+      settings.autoStartWork = pomoForm.autoStartWork;
+      settings.workStartReminder = pomoForm.workStartReminder;
+      await Promise.all([
+        settings.set('settings.shortBreakMinutes', pomoForm.shortBreakMinutes),
+        settings.set('settings.longBreakMinutes', pomoForm.longBreakMinutes),
+        settings.set('settings.longBreakInterval', pomoForm.longBreakInterval),
+        settings.set('settings.autoStartBreak', pomoForm.autoStartBreak),
+        settings.set('settings.forceBreakScreen', pomoForm.forceBreakScreen),
+        settings.set('settings.autoStartWork', pomoForm.autoStartWork),
+        settings.set('settings.workStartReminder', pomoForm.workStartReminder),
+      ]);
+      snapshotPomo();
+      message.success('番茄钟设置已保存');
+    } catch (e) {
+      console.error('保存番茄钟设置失败', e);
+      message.error('保存失败，请重试');
+    } finally {
+      saving.value = false;
+    }
+  }
+
+  onMounted(async () => {
+    await settings.load();
+    Object.assign(pomoForm, {
+      dailyPomodoroCount: settings.dailyPomodoroTarget,
+      workMinutes: settings.workMinutes,
+      shortBreakMinutes: settings.shortBreakMinutes,
+      longBreakMinutes: settings.longBreakMinutes,
+      longBreakInterval: settings.longBreakInterval,
+      autoStartBreak: settings.autoStartBreak,
+      forceBreakScreen: settings.forceBreakScreen,
+      autoStartWork: settings.autoStartWork,
+      workStartReminder: settings.workStartReminder,
+    });
+    snapshotPomo();
   });
 
   // 通用设置项行组件结构：label + slot
@@ -72,18 +186,6 @@
             </a-select>
           </a-form-item>
 
-          <a-form-item label="每日番茄目标">
-            <a-input-number
-              v-model:value="settings.dailyPomodoroTarget"
-              :min="1"
-              :max="30"
-              @change="
-                (v: number | null) => settings.set('settings.dailyPomodoroTarget', Number(v) || 8)
-              "
-            />
-            <div class="form-hint">统计页用于衡量每日完成度的目标个数</div>
-          </a-form-item>
-
           <a-form-item label="隐藏已完成任务">
             <a-switch
               v-model:checked="settings.hideCompleted"
@@ -97,66 +199,111 @@
       <!-- 番茄钟设置 -->
       <div v-if="activeKey === 'pomodoro'" class="settings-panel">
         <h3 class="panel-title">番茄钟设置</h3>
+
+        <!-- 时间预览窗口 -->
+        <div class="preview-card">
+          <div class="preview-item">
+            <div class="preview-label">每日可用时长</div>
+            <div class="preview-value">{{ dailyAvailableText }}</div>
+            <div class="preview-note">
+              {{ pomoForm.dailyPomodoroCount }} × {{ pomoForm.workMinutes }} 分钟
+            </div>
+          </div>
+          <div class="preview-divider"></div>
+          <div class="preview-item">
+            <div class="preview-label">年度剩余可用时长</div>
+            <div class="preview-value">{{ yearlyRemainingText }}</div>
+            <div class="preview-note">至 {{ dayjs().endOf('year').format('YYYY-MM-DD') }}</div>
+          </div>
+        </div>
+        <div v-if="settings.activeSchedule" class="schedule-hint">
+          当前配置自 {{ settings.activeSchedule.start_date }} 起生效，修改并保存后将从今日启用新配置
+        </div>
+
+        <!-- 专注计划（user_pomo_schedule） -->
+        <h4 class="section-title">专注计划</h4>
         <a-form layout="horizontal" :label-col="{ span: 8 }" :wrapper-col="{ span: 16 }">
-          <a-form-item label="工作时长（分钟）">
-            <a-input-number
-              v-model:value="settings.workMinutes"
-              :min="1"
-              :max="120"
-              @change="(v: number | null) => settings.set('settings.workMinutes', Number(v) || 25)"
-            />
+          <a-form-item label="每日专注目标">
+            <a-input-number v-model:value="pomoForm.dailyPomodoroCount" :min="1" :max="30" />
+            <a-tooltip title="每天计划完成的番茄钟个数，用于统计完成度与预估每日专注时长">
+              <QuestionCircleOutlined class="tip-icon" />
+            </a-tooltip>
           </a-form-item>
 
-          <a-form-item label="短休息时长（分钟）">
-            <a-input-number
-              v-model:value="settings.shortBreakMinutes"
-              :min="1"
-              :max="60"
-              @change="
-                (v: number | null) => settings.set('settings.shortBreakMinutes', Number(v) || 5)
-              "
-            />
+          <a-form-item label="专注时长（分钟）">
+            <a-input-number v-model:value="pomoForm.workMinutes" :min="1" :max="120" />
+            <a-tooltip title="单个番茄钟的专注时长，修改后从今日起按新时长执行">
+              <QuestionCircleOutlined class="tip-icon" />
+            </a-tooltip>
+          </a-form-item>
+        </a-form>
+
+        <a-divider class="section-divider" />
+
+        <!-- 休息与提醒（app_settings） -->
+        <h4 class="section-title">休息与提醒</h4>
+        <a-form layout="horizontal" :label-col="{ span: 8 }" :wrapper-col="{ span: 16 }">
+          <a-form-item label="短休息时长">
+            <a-input-number v-model:value="pomoForm.shortBreakMinutes" :min="1" :max="60" />
+            <a-tooltip title="完成一个番茄后的短休息时长">
+              <QuestionCircleOutlined class="tip-icon" />
+            </a-tooltip>
           </a-form-item>
 
-          <a-form-item label="长休息时长（分钟）">
-            <a-input-number
-              v-model:value="settings.longBreakMinutes"
-              :min="5"
-              :max="120"
-              @change="
-                (v: number | null) => settings.set('settings.longBreakMinutes', Number(v) || 15)
-              "
-            />
+          <a-form-item label="长休息时长">
+            <a-input-number v-model:value="pomoForm.longBreakMinutes" :min="5" :max="120" />
+            <a-tooltip title="完成一轮番茄后的长休息时长">
+              <QuestionCircleOutlined class="tip-icon" />
+            </a-tooltip>
           </a-form-item>
 
           <a-form-item label="长休息间隔">
-            <a-input-number
-              v-model:value="settings.longBreakInterval"
-              :min="2"
-              :max="10"
-              @change="
-                (v: number | null) => settings.set('settings.longBreakInterval', Number(v) || 4)
-              "
-            />
-            <div class="form-hint">每完成 N 个工作番茄后进入一次长休息</div>
+            <a-input-number v-model:value="pomoForm.longBreakInterval" :min="2" :max="10" />
+            <a-tooltip title="每完成 N 个工作番茄后进入一次长休息">
+              <QuestionCircleOutlined class="tip-icon" />
+            </a-tooltip>
           </a-form-item>
 
           <a-form-item label="自动开始休息">
-            <a-switch
-              v-model:checked="settings.autoStartBreak"
-              @change="(v: boolean) => settings.set('settings.autoStartBreak', v)"
-            />
-            <div class="form-hint">完成一个番茄后自动进入休息倒计时</div>
+            <a-switch v-model:checked="pomoForm.autoStartBreak" />
+            <a-tooltip title="完成一个番茄后自动进入休息倒计时，无需手动点击开始">
+              <QuestionCircleOutlined class="tip-icon" />
+            </a-tooltip>
           </a-form-item>
 
-          <a-form-item label="自动开始工作">
-            <a-switch
-              v-model:checked="settings.autoStartWork"
-              @change="(v: boolean) => settings.set('settings.autoStartWork', v)"
-            />
-            <div class="form-hint">休息结束后自动开始下一个番茄</div>
+          <a-form-item label="强制休息提醒">
+            <a-switch v-model:checked="pomoForm.forceBreakScreen" />
+            <a-tooltip title="休息期间打开全屏强制休息界面，避免休息时继续工作">
+              <QuestionCircleOutlined class="tip-icon" />
+            </a-tooltip>
+          </a-form-item>
+
+          <a-form-item label="自动开始专注">
+            <a-switch v-model:checked="pomoForm.autoStartWork" />
+            <a-tooltip title="休息结束后自动开始下一个番茄，无需手动操作">
+              <QuestionCircleOutlined class="tip-icon" />
+            </a-tooltip>
+          </a-form-item>
+
+          <a-form-item label="专注开始提醒">
+            <a-switch v-model:checked="pomoForm.workStartReminder" />
+            <a-tooltip title="开始工作时打开工作开始提醒界面，提示你进入专注状态">
+              <QuestionCircleOutlined class="tip-icon" />
+            </a-tooltip>
           </a-form-item>
         </a-form>
+
+        <!-- 操作栏：仅在存在未保存修改时显示重置与保存，保存/重置后隐藏 -->
+        <div class="pomo-actions">
+          <a-button v-if="pomoDirty" type="primary" :loading="saving" @click="savePomo">
+            <template #icon><SaveOutlined /></template>
+            保存修改
+          </a-button>
+          <a-button v-if="pomoDirty" :disabled="saving" @click="resetPomo">
+            <template #icon><ReloadOutlined /></template>
+            重置
+          </a-button>
+        </div>
       </div>
 
       <!-- 关于 -->
@@ -216,5 +363,85 @@
     font-size: 12px;
     color: rgba(0, 0, 0, 0.45);
     margin-top: 4px;
+  }
+
+  /* 时间预览窗口 */
+  .preview-card {
+    display: flex;
+    align-items: stretch;
+    background: linear-gradient(135deg, #f6f9ff 0%, #eef3ff 100%);
+    border: 1px solid #d6e4ff;
+    border-radius: 10px;
+    padding: 16px 24px;
+    margin-bottom: 12px;
+  }
+
+  .preview-item {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .preview-divider {
+    width: 1px;
+    background: #d6e4ff;
+    margin: 0 24px;
+  }
+
+  .preview-label {
+    font-size: 13px;
+    color: rgba(0, 0, 0, 0.55);
+    margin-bottom: 6px;
+  }
+
+  .preview-value {
+    font-size: 24px;
+    font-weight: 600;
+    color: #1677ff;
+    line-height: 1.2;
+    margin-bottom: 6px;
+  }
+
+  .preview-note {
+    font-size: 12px;
+    color: rgba(0, 0, 0, 0.4);
+  }
+
+  .schedule-hint {
+    font-size: 12px;
+    color: rgba(0, 0, 0, 0.45);
+    margin: 0 0 20px 2px;
+  }
+
+  /* 分区标题 */
+  .section-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: rgba(0, 0, 0, 0.88);
+    margin: 8px 0 20px;
+  }
+
+  .section-divider {
+    margin: 28px 0;
+  }
+
+  /* 问号 tooltip 图标 */
+  .tip-icon {
+    margin-left: 8px;
+    color: rgba(0, 0, 0, 0.35);
+    cursor: help;
+  }
+
+  .tip-icon:hover {
+    color: #1677ff;
+  }
+
+  /* 操作栏 */
+  .pomo-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+    padding-top: 20px;
+    border-top: 1px solid #f0f0f0;
   }
 </style>
