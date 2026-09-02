@@ -17,6 +17,7 @@
     dayRange,
     overlapsRange,
     countRuleOccurrences,
+    getRepository,
     type Task,
   } from '@/api';
   import { getWeekDateRange, countWorkdaysInWeek, getDayTypeInfo } from '@/utils/holiday';
@@ -30,6 +31,37 @@
 
   // 当前视图数据（store 为唯一数据源，直接响应式引用）
   const currentData = computed<Task[]>(() => planStore.currentData);
+
+  /**
+   * 各任务已完成番茄数映射（taskId → count）。
+   * 日视图渲染的任务除本级（dayData 已含 finished_pomodoro）外，还并入上级的循环任务
+   * （quarter/month/week 数据未附 finished_pomodoro）。这里统一按 pomodoro_records 统计，
+   * 供日视图 TaskListItem 判断「已完成数 < 设定配额」时正确显示播放按钮。
+   */
+  const finishedCountMap = ref<Record<string, number>>({});
+  watch(
+    () => [
+      planStore.cycleValue,
+      planStore.quarterData,
+      planStore.monthData,
+      planStore.weekData,
+      planStore.dayData,
+    ],
+    async () => {
+      if (planStore.cycleValue !== 4) return;
+      const ids = [
+        ...planStore.quarterData,
+        ...planStore.monthData,
+        ...planStore.weekData,
+        ...planStore.dayData,
+      ]
+        .map(t => t.id)
+        .filter((v, i, a) => a.indexOf(v) === i);
+      const counts = await getRepository().countCompletedPomodoros(ids);
+      finishedCountMap.value = counts;
+    },
+    { immediate: true }
+  );
 
   // ---- 变更标志 → 自动刷新（按需加载，避免全量重拉导致界面重构）----
   watch(
@@ -256,7 +288,11 @@
         );
         break;
     }
-    return [...own, ...inherited];
+    return [...own, ...inherited].map(t => ({
+      ...t,
+      // 补充已完成番茄数：合并进来的上级循环任务无 finished_pomodoro，统一从映射补齐
+      finished_pomodoro: finishedCountMap.value[t.id] ?? (t as any).finished_pomodoro ?? 0,
+    }));
   });
 </script>
 

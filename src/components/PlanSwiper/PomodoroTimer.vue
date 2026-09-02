@@ -94,7 +94,7 @@
         record_date: dayjs().format('YYYY-MM-DD'),
         start_time: sessionStart ? sessionStart.toISOString() : end.toISOString(),
         end_time: end.toISOString(),
-        duration_minutes: settings.workMinutes,
+        effective_total_seconds: settings.workMinutes * 60,
         status: 'completed',
       });
       completedCount.value += 1;
@@ -114,7 +114,7 @@
         record_date: dayjs().format('YYYY-MM-DD'),
         start_time: sessionStart.toISOString(),
         end_time: new Date().toISOString(),
-        duration_minutes: elapsedMinutes,
+        effective_total_seconds: elapsedMinutes * 60,
         status: 'interrupted',
       });
     } catch (error) {

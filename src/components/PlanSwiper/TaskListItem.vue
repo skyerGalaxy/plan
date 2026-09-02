@@ -9,7 +9,7 @@
   import RangeButton from './RangeButton.vue';
   import PomodoroCounter from './PomodoroCounter.vue';
   import LoopRuleModal from './LoopRuleModal.vue';
-  import { ref } from 'vue';
+  import { ref, computed } from 'vue';
   import { getRepository, countRuleOccurrences } from '@/api';
   import { message } from 'ant-design-vue';
   import { useRouter } from 'vue-router';
@@ -25,6 +25,19 @@
 
   const planStore = usePlanerStore();
   const emit = defineEmits(['open-modal', 'delete-task']);
+
+  // 番茄钟设定配额：循环任务按单次 pomodoro_per_occurrence 计，普通任务按 total_pomodoro_quota 计
+  const pomodoroTarget = computed(() =>
+    props.item.is_cyclic === 1
+      ? props.item.pomodoro_per_occurrence || props.item.total_pomodoro_quota
+      : props.item.total_pomodoro_quota
+  );
+
+  // 该任务已完成番茄数（由数据层/父级附带 finished_pomodoro）
+  const finishedPomodoro = computed(() => props.item.finished_pomodoro || 0);
+
+  // 已完成数未达设定配额时才可进入番茄钟开始专注
+  const canStartPomodoro = computed(() => finishedPomodoro.value < pomodoroTarget.value);
 
   const handleOpenModal = () => {
     // 循环任务只能删除，禁止打开编辑弹窗
@@ -129,12 +142,8 @@
             <div class="actions-container">
               <RangeButton :range="props.item.sort_order" :disable="true" />
               <PomodoroCounter
-                :total-pomodoro="
-                  props.item.is_cyclic === 1
-                    ? props.item.pomodoro_per_occurrence || props.item.total_pomodoro_quota
-                    : props.item.total_pomodoro_quota
-                "
-                :finishedPomodoro="props.item.finished_pomodoro"
+                :total-pomodoro="pomodoroTarget"
+                :finishedPomodoro="finishedPomodoro"
                 readonly
               />
             </div>
@@ -151,6 +160,7 @@
           </template>
           <template #avatar>
             <a-avatar
+              v-if="canStartPomodoro"
               @click.stop="
                 router.push(
                   `/pomodoro/${props.item.id}/${encodeURIComponent(props.item.title)}/${props.item.total_pomodoro_quota}`

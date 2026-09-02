@@ -147,7 +147,10 @@ export function normalizeTask(row: Record<string, any>): Task {
 export function normalizePomodoroRecord(row: Record<string, any>) {
   return {
     ...row,
-    duration_minutes: Number(row.duration_minutes ?? 0),
+    effective_total_seconds: Number(row.effective_total_seconds ?? 0),
+    resume_count: Number(row.resume_count ?? 0),
+    reward_gold: Number(row.reward_gold ?? 0),
+    interrupt_duration_seconds: row.interrupt_duration_seconds ?? null,
     end_time: row.end_time ?? null,
   };
 }

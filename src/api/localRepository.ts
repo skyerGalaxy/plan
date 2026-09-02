@@ -191,16 +191,20 @@ export const localRepository: TaskRepository = {
     const db = await getDb();
     const id = input.id ?? newId();
     const rows = await db.select<Record<string, any>[]>(
-      `INSERT INTO pomodoro_records (id, task_id, record_date, start_time, end_time, duration_minutes, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      `INSERT INTO pomodoro_records (id, task_id, record_date, start_time, end_time,
+        effective_total_seconds, status, resume_count, interrupt_duration_seconds, reward_gold)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
       [
         id,
         input.task_id,
         input.record_date,
         input.start_time,
         input.end_time,
-        input.duration_minutes,
+        input.effective_total_seconds,
         input.status,
+        input.resume_count ?? 0,
+        input.interrupt_duration_seconds ?? null,
+        input.reward_gold ?? 0,
       ]
     );
     return normalizePomodoroRecord(rows[0]) as PomodoroRecord;

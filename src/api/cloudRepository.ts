@@ -43,8 +43,11 @@ import dayjs from 'dayjs';
  *   record_date date not null,
  *   start_time timestamptz not null,
  *   end_time timestamptz,
- *   duration_minutes int not null,
- *   status text not null default 'completed',
+ *   effective_total_seconds int not null default 0,
+ *   status text not null,
+ *   resume_count int not null default 0,
+ *   interrupt_duration_seconds int,
+ *   reward_gold int not null default 0,
  *   created_at timestamptz not null default now()
  * );
  * create table if not exists app_settings (

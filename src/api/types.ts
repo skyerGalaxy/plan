@@ -45,8 +45,11 @@ export interface PomodoroRecord {
   record_date: string; // YYYY-MM-DD
   start_time: string; // ISO DATETIME
   end_time: string | null;
-  duration_minutes: number;
+  effective_total_seconds: number; // 有效专注总时长（秒）
   status: 'completed' | 'interrupted';
+  resume_count: number; // 续番茄次数
+  interrupt_duration_seconds: number | null; // 中断时长（秒）
+  reward_gold: number; // 奖励金币
   created_at?: string;
 }
 

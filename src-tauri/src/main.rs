@@ -33,12 +33,15 @@ fn migrations() -> Vec<Migration> {
             CREATE TABLE IF NOT EXISTS pomodoro_records (
                 id TEXT PRIMARY KEY,
                 task_id TEXT NOT NULL,
-                record_date DATE NOT NULL,
-                start_time DATETIME NOT NULL,
-                end_time DATETIME DEFAULT NULL,
-                duration_minutes INTEGER NOT NULL,
-                status TEXT NOT NULL DEFAULT 'completed',
-                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                record_date TEXT NOT NULL,
+                start_time TEXT NOT NULL,
+                end_time TEXT NULL,
+                effective_total_seconds INTEGER NOT NULL DEFAULT 0,
+                status TEXT NOT NULL,
+                resume_count INTEGER NOT NULL DEFAULT 0,
+                interrupt_duration_seconds INTEGER NULL,
+                reward_gold INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS app_settings (
                 key TEXT PRIMARY KEY,
@@ -62,9 +65,9 @@ fn migrations() -> Vec<Migration> {
             CREATE INDEX IF NOT EXISTS idx_tasks_quarter_id ON tasks(quarter_id);
             CREATE INDEX IF NOT EXISTS idx_tasks_month_id ON tasks(month_id);
             CREATE INDEX IF NOT EXISTS idx_tasks_week_id ON tasks(week_id);
-            CREATE INDEX IF NOT EXISTS idx_pomodoro_task_id ON pomodoro_records(task_id);
-            CREATE INDEX IF NOT EXISTS idx_pomodoro_record_date ON pomodoro_records(record_date);
-            CREATE INDEX IF NOT EXISTS idx_pomodoro_task_status_date ON pomodoro_records(task_id, status, record_date);",
+            CREATE INDEX IF NOT EXISTS idx_pomo_task_id ON pomodoro_records(task_id);
+            CREATE INDEX IF NOT EXISTS idx_pomo_record_date ON pomodoro_records(record_date);
+            CREATE INDEX IF NOT EXISTS idx_pomo_status ON pomodoro_records(status);",
             kind: MigrationKind::Up,
         },
     ]
