@@ -2,8 +2,10 @@ import { createClient } from '@supabase/supabase-js';
 import type {
   NewPomodoroRecord,
   NewTask,
+  PomodoroOccurrenceKey,
   PomodoroRecord,
   PomodoroRecordFilter,
+  PomodoroRecordSync,
   PomoSchedule,
   Task,
   TaskFilter,
@@ -40,6 +42,7 @@ import dayjs from 'dayjs';
  * create table if not exists pomodoro_records (
  *   id uuid primary key default gen_random_uuid(),
  *   task_id uuid not null references tasks(id),
+ *   occurrence_date date,
  *   record_date date not null,
  *   start_time timestamptz not null,
  *   end_time timestamptz,
@@ -243,6 +246,12 @@ export const cloudRepository: TaskRepository = {
     return normalizePomodoroRecord(data) as PomodoroRecord;
   },
 
+  async upsertPomodoroRecord(input: PomodoroRecordSync): Promise<void> {
+    // 后端写库后事件驱动同步：按 id 幂等 upsert（running/paused/interrupted_saved/completed 全量快照）
+    const { error } = await supabase.from('pomodoro_records').upsert(input, { onConflict: 'id' });
+    if (error) throw error;
+  },
+
   async countCompletedPomodoros(taskIds: string[]): Promise<Record<string, number>> {
     if (!taskIds.length) return {};
     const { data, error } = await supabase
@@ -254,6 +263,26 @@ export const cloudRepository: TaskRepository = {
     const result: Record<string, number> = {};
     for (const row of data ?? []) {
       result[row.task_id] = (result[row.task_id] ?? 0) + 1;
+    }
+    return result;
+  },
+
+  async countOccurrencePomodoros(keys: PomodoroOccurrenceKey[]): Promise<Record<string, number>> {
+    if (!keys.length) return {};
+    const result: Record<string, number> = {};
+    // 分批查询避免 URL 过长
+    for (let i = 0; i < keys.length; i += 100) {
+      const batch = keys.slice(i, i + 100);
+      const { data, error } = await supabase
+        .from('pomodoro_records')
+        .select('task_id, occurrence_date')
+        .eq('status', 'completed')
+        .or(batch.map(k => `and(task_id.eq.${k.taskId},occurrence_date.eq.${k.date})`).join(','));
+      if (error) throw error;
+      for (const row of data ?? []) {
+        const key = `${row.task_id}::${row.occurrence_date ?? ''}`;
+        result[key] = (result[key] ?? 0) + 1;
+      }
     }
     return result;
   },

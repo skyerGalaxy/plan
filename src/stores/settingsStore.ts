@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { getRepository } from '@/api';
 import type { PomoSchedule } from '@/api';
+import { setFocusMode as setFocusModeCmd } from '@/api/pomodoro';
 
 /**
  * 应用设置中心
@@ -16,6 +17,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const weekStartsOn = ref<number>(1);
   // 是否隐藏已完成任务（联动计划页 HideSwitch 默认值）
   const hideCompleted = ref<boolean>(false);
+  // 主窗口「点叉」行为：true 最小化到系统托盘 / false 直接退出应用
+  const closeToTray = ref<boolean>(true);
 
   // ---- 番茄钟时段配置（user_pomo_schedule 当前生效段）----
   const dailyPomodoroTarget = ref<number>(8); // 每日番茄钟数量
@@ -30,6 +33,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const forceBreakScreen = ref<boolean>(true); // 休息时打开强制休息界面
   const autoStartWork = ref<boolean>(false); // 休息后自动开始下一个番茄
   const workStartReminder = ref<boolean>(false); // 工作时打开开始提醒界面
+  const focusMode = ref<boolean>(false); // 专注模式：开启后番茄启动时显示桌面宠物窗口
 
   // ---- 已在加载中，避免并发重复读取 ----
   let loaded = false;
@@ -58,6 +62,7 @@ export const useSettingsStore = defineStore('settings', () => {
       'settings.defaultCycle': v => (defaultCycle.value = Number(v) || 4),
       'settings.weekStartsOn': v => (weekStartsOn.value = Number(v) || 1),
       'settings.hideCompleted': v => (hideCompleted.value = v === 'true'),
+      'settings.closeToTray': v => (closeToTray.value = v === 'true'),
       'settings.dailyPomodoroTarget': v => {
         if (!scheduleLoaded) dailyPomodoroTarget.value = Number(v) || 8;
       },
@@ -71,6 +76,7 @@ export const useSettingsStore = defineStore('settings', () => {
       'settings.autoStartWork': v => (autoStartWork.value = v === 'true'),
       'settings.forceBreakScreen': v => (forceBreakScreen.value = v === 'true'),
       'settings.workStartReminder': v => (workStartReminder.value = v === 'true'),
+      'settings.focusMode': v => (focusMode.value = v === 'true'),
     };
     try {
       const entries = await Promise.all(
@@ -104,10 +110,22 @@ export const useSettingsStore = defineStore('settings', () => {
     activeSchedule.value = schedule;
   }
 
+  /** 切换专注模式：持久化到 app_settings 并同步后端窗口显隐 */
+  async function setFocusMode(enabled: boolean): Promise<void> {
+    focusMode.value = enabled;
+    await set('settings.focusMode', enabled);
+    try {
+      await setFocusModeCmd(enabled);
+    } catch (e) {
+      console.error('同步专注模式到后端失败', e);
+    }
+  }
+
   return {
     defaultCycle,
     weekStartsOn,
     hideCompleted,
+    closeToTray,
     dailyPomodoroTarget,
     workMinutes,
     activeSchedule,
@@ -118,8 +136,10 @@ export const useSettingsStore = defineStore('settings', () => {
     forceBreakScreen,
     autoStartWork,
     workStartReminder,
+    focusMode,
     load,
     set,
     saveSchedule,
+    setFocusMode,
   };
 });

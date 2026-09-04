@@ -17,6 +17,12 @@
   const activeKey = ref<string>('general');
   const saving = ref(false);
 
+  // 「点击关闭按钮」策略选项
+  const closeToTrayOptions = [
+    { label: '最小化到系统托盘', value: true },
+    { label: '退出应用', value: false },
+  ];
+
   // 番茄钟表单本地草稿：修改后仅停留在草稿，点击「保存修改」才落库
   const pomoForm = reactive({
     dailyPomodoroCount: 8, // 每日专注目标（user_pomo_schedule）
@@ -28,6 +34,7 @@
     forceBreakScreen: true, // 强制休息界面（app_settings）
     autoStartWork: false, // 自动开始专注（app_settings）
     workStartReminder: false, // 专注开始提醒（app_settings）
+    focusMode: false, // 专注模式：开启后显示桌面宠物窗口（app_settings）
   });
   // 已保存快照：用于脏检查与重置
   const pomoOriginal = ref<Record<string, unknown>>({});
@@ -56,6 +63,11 @@
     if (h > 0 && m > 0) return `${h} 小时 ${m} 分钟`;
     if (h > 0) return `${h} 小时`;
     return `${m} 分钟`;
+  }
+
+  /** 主窗口关闭行为（最小化到托盘 / 退出应用）变更即持久化 */
+  function onCloseToTrayChange(e: { target: { value: boolean } }) {
+    settings.set('settings.closeToTray', e.target.value);
   }
 
   function snapshotPomo() {
@@ -99,6 +111,8 @@
         settings.set('settings.autoStartWork', pomoForm.autoStartWork),
         settings.set('settings.workStartReminder', pomoForm.workStartReminder),
       ]);
+      // 专注模式：持久化并同步后端窗口显隐
+      await settings.setFocusMode(pomoForm.focusMode);
       snapshotPomo();
       message.success('番茄钟设置已保存');
     } catch (e) {
@@ -121,6 +135,7 @@
       forceBreakScreen: settings.forceBreakScreen,
       autoStartWork: settings.autoStartWork,
       workStartReminder: settings.workStartReminder,
+      focusMode: settings.focusMode,
     });
     snapshotPomo();
   });
@@ -192,6 +207,17 @@
               @change="(v: boolean) => settings.set('settings.hideCompleted', v)"
             />
             <div class="form-hint">在计划列表默认隐藏已经完成的任务</div>
+          </a-form-item>
+
+          <a-form-item label="点击关闭按钮时">
+            <a-radio-group
+              v-model:value="settings.closeToTray"
+              :options="closeToTrayOptions"
+              @change="onCloseToTrayChange"
+            />
+            <div class="form-hint">
+              {{ settings.closeToTray ? '最小化到系统托盘（可通过托盘图标恢复）' : '直接退出应用' }}
+            </div>
           </a-form-item>
         </a-form>
       </div>
@@ -288,6 +314,13 @@
           <a-form-item label="专注开始提醒">
             <a-switch v-model:checked="pomoForm.workStartReminder" />
             <a-tooltip title="开始工作时打开工作开始提醒界面，提示你进入专注状态">
+              <QuestionCircleOutlined class="tip-icon" />
+            </a-tooltip>
+          </a-form-item>
+
+          <a-form-item label="专注模式（桌面宠物）">
+            <a-switch v-model:checked="pomoForm.focusMode" />
+            <a-tooltip title="开启后，开始番茄钟时自动在屏幕右下角显示桌面宠物窗口；结束后自动隐藏">
               <QuestionCircleOutlined class="tip-icon" />
             </a-tooltip>
           </a-form-item>

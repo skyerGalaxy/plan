@@ -1,6 +1,8 @@
 <script lang="ts" setup>
-  import { ref, watch } from 'vue';
+  import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
   import { useRouter, useRoute } from 'vue-router';
+  import { getRepository } from '@/api';
+  import { onPomodoroStateUpdate, onPomodoroRecordSync, type UnlistenFn } from '@/api/pomodoro';
   import planlogeLight from './assets/images/plan_light.svg';
   import staticLight from './assets/images/statistics_light.svg';
   import personLight from './assets/images/profile_light.svg';
@@ -9,11 +11,41 @@
   const router = useRouter();
   const route = useRoute();
 
+  // 番茄钟状态全局导航：running 自动切入番茄钟页；中断保存自动返回任务列表
+  let pomodoroUnlisten: UnlistenFn | null = null;
+  // 后端番茄记录写库后同步到云端（幂等 upsert）
+  let recordSyncUnlisten: UnlistenFn | null = null;
+  onMounted(async () => {
+    pomodoroUnlisten = await onPomodoroStateUpdate(payload => {
+      if (payload.status === 'running' && route.path !== '/pomodoro') {
+        router.push('/pomodoro');
+      } else if (payload.status === 'interrupted_saved' && route.path === '/pomodoro') {
+        router.push('/');
+      }
+    });
+    recordSyncUnlisten = await onPomodoroRecordSync(payload => {
+      getRepository()
+        .upsertPomodoroRecord(payload)
+        .catch(e => console.error('番茄记录同步失败', payload?.id, e));
+    });
+  });
+  onBeforeUnmount(() => {
+    if (pomodoroUnlisten) {
+      pomodoroUnlisten();
+      pomodoroUnlisten = null;
+    }
+    if (recordSyncUnlisten) {
+      recordSyncUnlisten();
+      recordSyncUnlisten = null;
+    }
+  });
+
   const routeKeyMap: Record<string, string> = {
     '/': '1',
     '/statistics': '2',
     '/person': '3',
     '/settings': '4',
+    '/pomodoro': '1',
   };
 
   // 路由变化时同步高亮

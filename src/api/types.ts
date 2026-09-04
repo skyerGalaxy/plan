@@ -42,6 +42,8 @@ export type NewTask = Partial<Pick<Task, 'id' | 'quarter_id' | 'month_id' | 'wee
 export interface PomodoroRecord {
   id: string;
   task_id: string;
+  /** 循环任务的具体实例日期（YYYY-MM-DD）；非循环任务为 null */
+  occurrence_date: string | null;
   record_date: string; // YYYY-MM-DD
   start_time: string; // ISO DATETIME
   end_time: string | null;
@@ -56,6 +58,26 @@ export interface PomodoroRecord {
 /** 新建番茄记录输入 */
 export type NewPomodoroRecord = Partial<Pick<PomodoroRecord, 'id'>> &
   Omit<PomodoroRecord, 'id' | 'created_at'>;
+
+/**
+ * 后端事件驱动的记录全量快照（`pomodoro_record_sync` 事件负载）。
+ * 覆盖运行期各状态（running/paused/interrupted_saved/completed），
+ * 与 PomodoroRecord.status 相互独立，供云端/本地幂等 upsert。
+ */
+export interface PomodoroRecordSync {
+  id: string;
+  task_id: string;
+  /** 循环任务的具体实例日期（YYYY-MM-DD）；非循环任务为 null */
+  occurrence_date: string | null;
+  record_date: string; // YYYY-MM-DD
+  start_time: string; // ISO DATETIME
+  end_time: string | null;
+  effective_total_seconds: number; // 有效专注总时长（秒）
+  status: 'running' | 'paused' | 'interrupted_saved' | 'completed' | 'abandoned' | 'interrupted';
+  resume_count: number;
+  interrupt_duration_seconds: number | null;
+  reward_gold: number;
+}
 
 /** 任务过滤条件 */
 export interface TaskFilter {
@@ -73,6 +95,13 @@ export interface PomodoroRecordFilter {
   recordDate?: string;
   startDate?: string;
   endDate?: string;
+}
+
+/** 循环任务某次实例的唯一键（task_id + occurrence_date） */
+export interface PomodoroOccurrenceKey {
+  taskId: string;
+  /** 实例日期 YYYY-MM-DD */
+  date: string;
 }
 
 /**
@@ -110,8 +139,15 @@ export interface TaskRepository {
   // ---- pomodoro_records ----
   listPomodoroRecords(filter?: PomodoroRecordFilter): Promise<PomodoroRecord[]>;
   createPomodoroRecord(input: NewPomodoroRecord): Promise<PomodoroRecord>;
+  /** 事件驱动的记录同步：按 id 幂等 upsert（running/paused/interrupted_saved/completed 全量快照） */
+  upsertPomodoroRecord(input: PomodoroRecordSync): Promise<void>;
   /** 统计任务已完成番茄数，返回 { taskId: count } */
   countCompletedPomodoros(taskIds: string[]): Promise<Record<string, number>>;
+  /**
+   * 按「循环任务实例」统计已完成番茄数。
+   * 返回键为 `${taskId}::${date}` 的映射（同位实例各自独立计数）。
+   */
+  countOccurrencePomodoros(keys: PomodoroOccurrenceKey[]): Promise<Record<string, number>>;
   /** 统计任务全部番茄记录数（不限状态）上传是否存在已执行，返回 { taskId: count } */
   countPomodoroRecords(taskIds: string[]): Promise<Record<string, number>>;
 

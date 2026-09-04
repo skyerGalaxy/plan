@@ -27,7 +27,7 @@ const routes = [
     component: SettingsView,
   },
   {
-    path: '/pomodoro/:id/:taskName/:totalPomodoros',
+    path: '/pomodoro',
     name: 'PomodoroTimer',
     component: PomodoroTimer,
     props: true,

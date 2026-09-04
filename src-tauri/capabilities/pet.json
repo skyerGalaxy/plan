@@ -1,0 +1,11 @@
+{
+  "identifier": "pet",
+  "description": "permissions for the desktop pet window",
+  "local": true,
+  "windows": ["pet"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-outer-position",
+    "core:window:allow-set-position"
+  ]
+}

@@ -1,329 +1,230 @@
 <script setup lang="ts">
-  import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-  import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
-  import { getCurrentWebviewWindow, WebviewWindow } from '@tauri-apps/api/webviewWindow';
+  /**
+   * 桌面宠物窗口 —— 纯渲染层。
+   * 计时核心、状态流转、窗口显隐均由 Rust 后端驱动；
+   * 本组件仅订阅 `pomodoro_state_update` 事件渲染，并通过 invoke 触发后端命令。
+   */
+  import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+  import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
   import { PhysicalPosition } from '@tauri-apps/api/window';
-  import { getRepository } from '@/api';
+  import { message } from 'ant-design-vue';
+  import {
+    onPomodoroStateUpdate,
+    pausePomodoro,
+    resumePomodoro,
+    interruptSavePomodoro,
+    showMainWindow,
+    savePetPosition,
+    type PomodoroStatePayload,
+    type UnlistenFn,
+  } from '@/api/pomodoro';
 
-  const isDesktop = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-  const repo = getRepository();
-  const currentWindow = isDesktop ? getCurrentWebviewWindow() : null;
+  const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+  const currentWindow = inTauri ? getCurrentWebviewWindow() : null;
 
-  type Phase = 'focus' | 'pause' | 'rest';
+  // ---- 状态源（事件驱动，无本地计时器）----
+  const state = ref<PomodoroStatePayload | null>(null);
+  let unlisten: UnlistenFn | null = null;
 
-  interface PetStartPayload {
-    task_id: string;
-    task_name: string;
-    work_minutes?: number;
-    started_at?: number;
-  }
-
-  const phase = ref<Phase>('focus');
-  const taskId = ref('');
-  const taskName = ref('番茄任务');
-  const startedAt = ref(0);
-  const endAt = ref(0);
-  const workMinutes = ref(25);
-  const dailyTarget = ref(8);
-  const doneToday = ref(0);
-  const remainingMs = ref(25 * 60 * 1000);
-  const menuOpen = ref(false);
-  const hoverTime = ref(false);
-  const pinTop = ref(true);
-  const isDragging = ref(false);
-  const dragOffsetX = ref(0);
-  const dragOffsetY = ref(0);
-
-  let tickTimer: number | undefined;
-  let startListener: UnlistenFn | undefined;
-  let stopListener: UnlistenFn | undefined;
-  let closeListener: UnlistenFn | undefined;
-  let openMainListener: UnlistenFn | undefined;
-
+  const status = computed(() => state.value?.status ?? 'idle');
   const displayTime = computed(() => {
-    const totalSeconds = Math.max(0, Math.ceil(remainingMs.value / 1000));
-    const mm = Math.floor(totalSeconds / 60)
+    const total = Math.max(0, state.value?.remain_seconds ?? 0);
+    const mm = Math.floor(total / 60)
       .toString()
       .padStart(2, '0');
-    const ss = (totalSeconds % 60).toString().padStart(2, '0');
+    const ss = (total % 60).toString().padStart(2, '0');
     return `${mm}:${ss}`;
   });
 
-  const tomatoList = computed(() =>
-    Array.from({ length: Math.max(0, dailyTarget.value) }, (_, index) => index < doneToday.value)
+  // 桌宠动画状态
+  const petPhase = computed(() => (status.value === 'paused' ? 'paused' : 'focus'));
+
+  // ---- 悬停提示 ----
+  const hoverTime = ref(false);
+
+  // ---- 右键菜单 ----
+  const menuOpen = ref(false);
+  const menuX = ref(0);
+  const menuY = ref(0);
+  const menuRef = ref<HTMLElement | null>(null);
+
+  function apply(payload: PomodoroStatePayload | null) {
+    if (payload) state.value = payload;
+  }
+
+  // ---- 菜单（严格按后端状态渲染）----
+  const menuVisible = computed(() =>
+    ['running', 'paused', 'completed', 'interrupted_saved'].includes(status.value)
   );
 
-  function stopTick() {
-    if (tickTimer !== undefined) {
-      window.clearInterval(tickTimer);
-      tickTimer = undefined;
+  async function openMenu(e: MouseEvent) {
+    e.preventDefault();
+    if (!menuVisible.value) return;
+    menuOpen.value = true;
+    menuX.value = e.clientX;
+    menuY.value = e.clientY;
+    // 等菜单渲染后再测量尺寸，把位置钳制在窗口内，避免边缘被裁剪
+    await nextTick();
+    const el = menuRef.value;
+    if (el) {
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      menuX.value = Math.max(4, Math.min(menuX.value, vw - w - 4));
+      menuY.value = Math.max(4, Math.min(menuY.value, vh - h - 4));
     }
   }
 
-  function startTick() {
-    stopTick();
-    tickTimer = window.setInterval(() => {
-      if (phase.value === 'focus' && endAt.value > 0) {
-        const next = Math.max(0, endAt.value - Date.now());
-        remainingMs.value = next;
-        if (next <= 0) {
-          void completePomodoro();
-        }
-      }
-    }, 250);
-  }
-
-  async function loadSchedule() {
+  async function onPause() {
+    menuOpen.value = false;
     try {
-      const schedule = await repo.getActivePomoSchedule();
-      if (schedule) {
-        workMinutes.value = Number(schedule.pomodoro_work_minutes || 25);
-        dailyTarget.value = Number(schedule.daily_pomo_count || 8);
-      }
-    } catch (error) {
-      console.error('加载番茄配置失败', error);
+      apply(await pausePomodoro());
+    } catch (e: any) {
+      message.error(e?.message || '暂停失败');
     }
   }
 
-  async function refreshTodayCompleted() {
+  async function onInterruptSave() {
+    menuOpen.value = false;
     try {
-      const records = await repo.listPomodoroRecords({
-        recordDate: new Date().toISOString().slice(0, 10),
-      });
-      doneToday.value = records.filter(item => item.status === 'completed').length;
-    } catch (error) {
-      console.warn('刷新当日完成数失败', error);
-      doneToday.value = 0;
+      apply(await interruptSavePomodoro());
+    } catch (e: any) {
+      message.error(e?.message || '中断保存失败');
     }
   }
 
-  async function beginFocus(payload: PetStartPayload) {
-    taskId.value = payload.task_id;
-    taskName.value = payload.task_name || '番茄任务';
-    workMinutes.value = payload.work_minutes ?? workMinutes.value;
-
-    const now = Date.now();
-    startedAt.value = payload.started_at ?? now;
-    endAt.value = now + workMinutes.value * 60 * 1000;
-    remainingMs.value = workMinutes.value * 60 * 1000;
-    phase.value = 'focus';
-    startTick();
-    await refreshTodayCompleted();
-  }
-
-  async function completePomodoro() {
-    if (!taskId.value || !startedAt.value) return;
-
-    stopTick();
-    const endTime = new Date(endAt.value || Date.now()).toISOString();
-    const startTime = new Date(startedAt.value).toISOString();
-
+  async function onResume() {
+    menuOpen.value = false;
     try {
-      const durationMinutes = Math.max(1, Math.round((endAt.value - startedAt.value) / 60000));
-      await repo.createPomodoroRecord({
-        id: crypto.randomUUID(),
-        task_id: taskId.value,
-        resume_count: 0,
-        interrupt_duration_seconds: 0,
-        reward_gold: 0,
-        record_date: new Date().toISOString().slice(0, 10),
-        start_time: startTime,
-        end_time: endTime,
-        effective_total_seconds: durationMinutes * 60,
-        status: 'completed',
-      });
-      doneToday.value = Math.min(dailyTarget.value, doneToday.value + 1);
-    } catch (error) {
-      console.error('写入自然完成记录失败', error);
-    }
-
-    phase.value = 'rest';
-    remainingMs.value = 0;
-
-    window.setTimeout(() => {
-      phase.value = 'focus';
-      const nextNow = Date.now();
-      startedAt.value = nextNow;
-      endAt.value = nextNow + workMinutes.value * 60 * 1000;
-      remainingMs.value = workMinutes.value * 60 * 1000;
-      startTick();
-    }, 1200);
-
-    if (isDesktop) {
-      await emit('pet:completed', {
-        task_id: taskId.value,
-        task_name: taskName.value,
-      });
+      apply(await resumePomodoro());
+    } catch (e: any) {
+      message.error(e?.message || '继续运行失败');
     }
   }
 
-  async function stopFocusByManual() {
-    if (!taskId.value || !startedAt.value) return;
-
-    const elapsed = Date.now() - startedAt.value;
-    const shouldWrite = elapsed >= 60 * 1000;
-
-    if (shouldWrite) {
-      try {
-        await repo.createPomodoroRecord({
-          id: crypto.randomUUID(),
-          task_id: taskId.value,
-          record_date: new Date().toISOString().slice(0, 10),
-          start_time: new Date(startedAt.value).toISOString(),
-          end_time: new Date().toISOString(),
-          resume_count: 0,
-          interrupt_duration_seconds: 0,
-          reward_gold: 0,
-          effective_total_seconds: Math.max(60, Math.round(elapsed / 1000)),
-          status: 'interrupted',
-        });
-      } catch (error) {
-        console.error('手动结束记录写入失败', error);
-      }
-    }
-
-    stopTick();
-    phase.value = 'focus';
-    remainingMs.value = workMinutes.value * 60 * 1000;
-
-    if (isDesktop) {
-      await emit('pet:finished', {
-        task_id: taskId.value,
-        task_name: taskName.value,
-      });
-    }
-
-    if (currentWindow) {
-      await currentWindow.close();
-    }
+  function onBackToList() {
+    menuOpen.value = false;
+    void showMainWindow();
   }
 
-  async function togglePause() {
-    if (phase.value === 'focus') {
-      phase.value = 'pause';
-      stopTick();
-      if (isDesktop) {
-        await emit('pet:paused', { task_id: taskId.value, task_name: taskName.value });
-      }
-      return;
-    }
+  // ---- 拖拽移动（松开保存坐标，限制在屏幕内）----
+  const isDragging = ref(false);
+  const didDrag = ref(false);
+  let dragStartScreenX = 0;
+  let dragStartScreenY = 0;
+  let dragStartWinX = 0;
+  let dragStartWinY = 0;
 
-    if (phase.value === 'pause') {
-      phase.value = 'focus';
-      endAt.value = Date.now() + remainingMs.value;
-      startTick();
-      if (isDesktop) {
-        await emit('pet:resumed', { task_id: taskId.value, task_name: taskName.value });
-      }
-    }
-  }
-
-  async function openMainWindow() {
-    if (!isDesktop) return;
-
-    try {
-      const mainWindow = await WebviewWindow.getByLabel('main');
-      if (mainWindow) {
-        await mainWindow.show();
-        await mainWindow.setFocus();
-      }
-    } catch {
-      // no-op when the parent window is not yet available
-    }
-  }
-
-  async function bindPetEvents() {
-    if (!isDesktop) return;
-    startListener = await listen('pet:start', event => {
-      const payload = event.payload as PetStartPayload;
-      void beginFocus(payload);
-    });
-
-    closeListener = await listen('pet:close', () => {
-      void currentWindow?.close();
-    });
-
-    openMainListener = await listen('pet:open-main', () => {
-      void openMainWindow();
-    });
-
-    stopListener = await listen('pet:pause', () => {
-      void togglePause();
-    });
-  }
-
-  async function handleMouseDown(event: MouseEvent) {
-    if (!isDesktop || !currentWindow) return;
-    const pos = await currentWindow.outerPosition();
+  async function onMouseDown(e: MouseEvent) {
+    if (e.button !== 0 || !currentWindow) return;
     isDragging.value = true;
-    dragOffsetX.value = event.clientX - pos.x;
-    dragOffsetY.value = event.clientY - pos.y;
+    didDrag.value = false;
+    dragStartScreenX = e.screenX;
+    dragStartScreenY = e.screenY;
+    const pos = await currentWindow.outerPosition();
+    dragStartWinX = pos?.x ?? 0;
+    dragStartWinY = pos?.y ?? 0;
   }
 
-  async function handleMouseMove(event: MouseEvent) {
-    if (!isDragging.value || !currentWindow || !isDesktop) return;
-    await currentWindow.setPosition(
-      new PhysicalPosition(event.screenX - dragOffsetX.value, event.screenY - dragOffsetY.value)
-    );
+  async function onMouseMove(e: MouseEvent) {
+    if (!isDragging.value || !currentWindow) return;
+    if (Math.abs(e.screenX - dragStartScreenX) > 3 || Math.abs(e.screenY - dragStartScreenY) > 3) {
+      didDrag.value = true;
+    }
+    const nx = dragStartWinX + (e.screenX - dragStartScreenX);
+    const ny = dragStartWinY + (e.screenY - dragStartScreenY);
+    await currentWindow.setPosition(new PhysicalPosition(nx, ny));
   }
 
-  function handleMouseUp() {
+  async function onMouseUp() {
+    if (!isDragging.value) return;
     isDragging.value = false;
+    if (didDrag.value && currentWindow) {
+      const pos = await currentWindow.outerPosition();
+      if (pos) void savePetPosition(pos.x, pos.y);
+    }
+  }
+
+  // ---- 双击召回主窗口 ----
+  function onDblClick() {
+    if (didDrag.value) return;
+    void showMainWindow();
+  }
+
+  // ---- 关闭菜单（点击其它区域）----
+  function onShellClick() {
+    if (menuOpen.value) menuOpen.value = false;
   }
 
   onMounted(async () => {
-    await loadSchedule();
-    await refreshTodayCompleted();
-    await bindPetEvents();
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
+    unlisten = await onPomodoroStateUpdate(apply);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
   });
 
   onBeforeUnmount(() => {
-    stopTick();
-    if (startListener) startListener();
-    if (stopListener) stopListener();
-    if (closeListener) closeListener();
-    if (openMainListener) openMainListener();
-    window.removeEventListener('mousemove', handleMouseMove);
-    window.removeEventListener('mouseup', handleMouseUp);
+    if (unlisten) {
+      unlisten();
+      unlisten = null;
+    }
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', onMouseUp);
   });
 </script>
 
 <template>
-  <div class="pet-shell" @contextmenu.prevent @mousedown="handleMouseDown" @mouseup="handleMouseUp">
-    <div class="pet-body" :class="`pet-${phase}`">
-      <div class="pet-face">
-        <div class="eye left"></div>
-        <div class="eye right"></div>
-        <div class="mouth"></div>
+  <div
+    class="pet-root"
+    :class="`pet-${petPhase}`"
+    @contextmenu.prevent="openMenu"
+    @mousedown.left="onMouseDown"
+    @dblclick="onDblClick"
+    @click="onShellClick"
+    @mouseenter="hoverTime = true"
+    @mouseleave="hoverTime = false"
+  >
+    <div class="pet-card">
+      <div class="pet-title" :title="state?.task_title || ''">
+        {{ state?.task_title || '番茄钟' }}
       </div>
-      <div class="pet-ears">
-        <span></span>
-        <span></span>
+
+      <div class="pet-time">{{ displayTime }}</div>
+
+      <div class="pet-status">
+        <span v-if="status === 'running'" class="dot running"></span>
+        <span v-else-if="status === 'paused'" class="dot paused"></span>
+        <span v-else class="dot idle"></span>
+        <span v-if="status === 'running'">专注中</span>
+        <span v-else-if="status === 'paused'">已暂停</span>
+        <span v-else-if="status === 'completed'">完成 🎉</span>
+        <span v-else-if="status === 'interrupted_saved'">已中断保存</span>
+        <span v-else>空闲</span>
       </div>
-      <div class="pet-paw" v-for="n in 2" :key="n"></div>
-    </div>
 
-    <div class="tomato-row" v-if="dailyTarget > 0">
-      <span
-        v-for="(done, index) in tomatoList"
-        :key="index"
-        class="tomato"
-        :class="done ? 'done' : 'undone'"
-      ></span>
-    </div>
+      <!-- 悬停提示：剩余时间 -->
+      <div v-show="hoverTime" class="hover-bubble">剩余 {{ displayTime }}</div>
 
-    <div class="hover-bubble" v-show="hoverTime">
-      {{ displayTime }}
-    </div>
-
-    <div v-show="menuOpen" class="bubble-menu">
-      <button @click="togglePause">
-        {{ phase === 'pause' ? '继续' : '暂停' }}
-      </button>
-      <button @click="stopFocusByManual">结束专注</button>
-      <button @click="openMainWindow">打开主窗口</button>
+      <!-- 右键菜单（严格按状态渲染，钳制在窗口内） -->
+      <div
+        v-if="menuOpen"
+        ref="menuRef"
+        class="bubble-menu"
+        :style="{ left: menuX + 'px', top: menuY + 'px' }"
+        @click.stop
+        @mousedown.stop
+        @contextmenu.prevent.stop
+      >
+        <button v-if="status === 'running'" @click="onPause">暂停</button>
+        <button v-if="status === 'running'" @click="onInterruptSave">中断保存</button>
+        <button v-if="status === 'paused'" @click="onResume">继续运行</button>
+        <button
+          v-if="status === 'completed' || status === 'interrupted_saved'"
+          @click="onBackToList"
+        >
+          返回任务列表
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -331,216 +232,150 @@
 <style scoped>
   :global(body) {
     margin: 0;
+    padding: 0 !important;
     overflow: hidden;
     background: transparent;
   }
 
-  .pet-shell {
+  :global(#app) {
+    background: transparent !important;
+    overflow: hidden;
+  }
+
+  .pet-root {
     position: relative;
-    width: 200px;
-    height: 200px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.08);
+    width: 240px;
+    height: 130px;
     user-select: none;
-    cursor: move;
+    cursor: grab;
   }
 
-  .pet-body {
-    position: absolute;
-    left: 50%;
-    top: 44%;
-    width: 96px;
-    height: 96px;
-    transform: translate(-50%, -50%);
-    border-radius: 44% 44% 42% 42%;
-    background: linear-gradient(180deg, #d8f5ff 0%, #9ad6e8 100%);
-    box-shadow: 0 10px 18px rgba(40, 88, 112, 0.2);
-    animation: float 2.8s ease-in-out infinite;
+  .pet-root:active {
+    cursor: grabbing;
   }
 
-  .pet-focus {
-    animation: focus-breathe 2.4s ease-in-out infinite;
-  }
-
-  .pet-pause {
-    transform: translate(-50%, -50%) rotate(-2deg);
-  }
-
-  .pet-rest {
-    transform: translate(-50%, -50%) scale(0.96);
-    animation: resting 3.5s ease-in-out infinite;
-  }
-
-  .pet-face {
-    position: absolute;
-    inset: 0;
-  }
-
-  .eye {
-    position: absolute;
-    width: 7px;
-    height: 10px;
-    top: 42px;
-    border-radius: 50%;
-    background: #1d2a33;
-  }
-
-  .eye.left {
-    left: 28px;
-  }
-  .eye.right {
-    right: 28px;
-  }
-
-  .mouth {
-    position: absolute;
-    left: 50%;
-    bottom: 26px;
-    width: 26px;
-    height: 14px;
-    transform: translateX(-50%);
-    border-bottom: 3px solid #2b3840;
-    border-radius: 0 0 18px 18px;
-  }
-
-  .pet-ears span {
-    position: absolute;
-    top: -10px;
-    width: 18px;
-    height: 18px;
-    background: #9ad6e8;
-    border-radius: 50% 50% 0 0;
-  }
-
-  .pet-ears span:first-child {
-    left: 20px;
-    transform: rotate(-18deg);
-  }
-  .pet-ears span:last-child {
-    right: 20px;
-    transform: rotate(18deg);
-  }
-
-  .pet-paw {
-    position: absolute;
-    bottom: -8px;
-    width: 18px;
-    height: 20px;
-    border-radius: 14px;
-    background: rgba(93, 167, 196, 0.9);
-  }
-
-  .pet-paw:nth-child(3) {
-    left: 26px;
-  }
-  .pet-paw:nth-child(4) {
-    right: 26px;
-  }
-
-  .tomato-row {
-    position: absolute;
-    left: 50%;
-    bottom: 8px;
-    transform: translateX(-50%);
+  .pet-card {
+    position: relative;
+    margin: 8px;
+    height: 114px;
+    border-radius: 16px;
+    padding: 8px 12px;
+    box-sizing: border-box;
     display: flex;
-    gap: 6px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(24, 32, 40, 0.82);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
+    color: #fff;
+    transition: background 0.2s;
   }
 
-  .tomato {
-    width: 10px;
-    height: 10px;
+  .pet-focus .pet-card {
+    background: linear-gradient(160deg, rgba(255, 99, 71, 0.82), rgba(40, 88, 112, 0.82));
+  }
+
+  .pet-paused .pet-card {
+    background: rgba(24, 32, 40, 0.82);
+  }
+
+  .pet-title {
+    width: 100%;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.9);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+  }
+
+  .pet-time {
+    font-size: 34px;
+    font-weight: 700;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 1px;
+  }
+
+  .pet-status {
+    margin-top: 2px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  .dot {
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
     display: inline-block;
-    position: relative;
-    box-shadow: inset -2px -2px 0 rgba(0, 0, 0, 0.08);
   }
-
-  .tomato.done {
-    background: linear-gradient(180deg, #ff6b6b 0%, #d62828 100%);
+  .dot.running {
+    background: #52e07c;
+    animation: pulse 1s infinite;
   }
-
-  .tomato.done::before {
-    content: '';
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    width: 3px;
-    height: 3px;
-    transform: translate(-50%, -50%);
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.6);
+  .dot.paused {
+    background: #ffb347;
   }
-
-  .tomato.undone {
-    background: linear-gradient(180deg, #efefef 0%, #d0d0d0 100%);
+  .dot.idle {
+    background: #9aa5af;
   }
 
   .hover-bubble {
     position: absolute;
     left: 50%;
-    top: -18px;
-    transform: translateX(-50%);
-    padding: 4px 8px;
-    border-radius: 10px;
-    background: rgba(28, 31, 39, 0.72);
+    top: -6px;
+    transform: translate(-50%, -100%);
+    padding: 4px 9px;
+    border-radius: 9px;
+    background: rgba(28, 31, 39, 0.9);
     color: #fff;
     font-size: 12px;
-    line-height: 1.2;
     white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   }
 
   .bubble-menu {
-    position: absolute;
-    left: 50%;
-    top: 18px;
-    transform: translateX(-50%);
+    position: fixed;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 8px 10px;
-    border-radius: 12px;
-    background: rgba(22, 26, 32, 0.8);
+    gap: 5px;
+    padding: 7px;
+    border-radius: 10px;
+    background: rgba(22, 26, 32, 0.94);
     backdrop-filter: blur(6px);
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
+    z-index: 20;
+    min-width: 96px;
+    cursor: default;
   }
 
   .bubble-menu button {
     border: none;
-    border-radius: 8px;
+    border-radius: 7px;
     background: rgba(255, 255, 255, 0.08);
     color: #fff;
     padding: 6px 10px;
     font-size: 12px;
+    text-align: left;
     cursor: pointer;
   }
 
-  @keyframes focus-breathe {
-    0%,
-    100% {
-      transform: translate(-50%, -50%) scale(1);
-    }
-    50% {
-      transform: translate(-50%, -50%) scale(1.05);
-    }
+  .bubble-menu button:hover {
+    background: rgba(255, 255, 255, 0.18);
   }
 
-  @keyframes float {
+  @keyframes pulse {
     0%,
     100% {
-      transform: translate(-50%, -50%) translateY(0);
+      opacity: 1;
     }
     50% {
-      transform: translate(-50%, -50%) translateY(-5px);
-    }
-  }
-
-  @keyframes resting {
-    0%,
-    100% {
-      transform: translate(-50%, -50%) rotate(0deg);
-    }
-    50% {
-      transform: translate(-50%, -50%) rotate(-4deg) scale(0.98);
+      opacity: 0.35;
     }
   }
 </style>

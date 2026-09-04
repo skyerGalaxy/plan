@@ -5,8 +5,10 @@ import type {
   TaskRepository,
   NewTask,
   NewPomodoroRecord,
+  PomodoroOccurrenceKey,
   PomodoroRecord,
   PomodoroRecordFilter,
+  PomodoroRecordSync,
 } from './types';
 import { localRepository } from './localRepository';
 import { cloudRepository } from './cloudRepository';
@@ -85,6 +87,12 @@ const dualRepository: TaskRepository = {
     return cloud;
   },
 
+  // 后端写库后事件驱动同步：先云端（权威），成功后本地静默镜像
+  async upsertPomodoroRecord(input: PomodoroRecordSync): Promise<void> {
+    await cloudRepository.upsertPomodoroRecord(input);
+    await localWrite(() => localRepository.upsertPomodoroRecord(input));
+  },
+
   // ---- app_settings（写：云→本地） ----
   async setSetting(key: string, value: string): Promise<void> {
     await cloudRepository.setSetting(key, value);
@@ -128,6 +136,13 @@ const dualRepository: TaskRepository = {
     return readOrLocal(
       () => cloudRepository.countCompletedPomodoros(taskIds),
       () => localRepository.countCompletedPomodoros(taskIds)
+    );
+  },
+
+  async countOccurrencePomodoros(keys: PomodoroOccurrenceKey[]): Promise<Record<string, number>> {
+    return readOrLocal(
+      () => cloudRepository.countOccurrencePomodoros(keys),
+      () => localRepository.countOccurrencePomodoros(keys)
     );
   },
 

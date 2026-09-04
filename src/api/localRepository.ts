@@ -2,8 +2,10 @@ import Database from '@tauri-apps/plugin-sql';
 import type {
   NewPomodoroRecord,
   NewTask,
+  PomodoroOccurrenceKey,
   PomodoroRecord,
   PomodoroRecordFilter,
+  PomodoroRecordSync,
   PomoSchedule,
   Task,
   TaskFilter,
@@ -191,12 +193,13 @@ export const localRepository: TaskRepository = {
     const db = await getDb();
     const id = input.id ?? newId();
     const rows = await db.select<Record<string, any>[]>(
-      `INSERT INTO pomodoro_records (id, task_id, record_date, start_time, end_time,
+      `INSERT INTO pomodoro_records (id, task_id, occurrence_date, record_date, start_time, end_time,
         effective_total_seconds, status, resume_count, interrupt_duration_seconds, reward_gold)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
       [
         id,
         input.task_id,
+        input.occurrence_date ?? null,
         input.record_date,
         input.start_time,
         input.end_time,
@@ -208,6 +211,63 @@ export const localRepository: TaskRepository = {
       ]
     );
     return normalizePomodoroRecord(rows[0]) as PomodoroRecord;
+  },
+
+  async upsertPomodoroRecord(input: PomodoroRecordSync): Promise<void> {
+    const db = await getDb();
+    // 幂等镜像后端写入：INSERT 分支 created_at 用 CURRENT_TIMESTAMP 兜底；冲突时更新各列但不触碰 created_at
+    await db.execute(
+      `INSERT INTO pomodoro_records (id, task_id, occurrence_date, record_date, start_time, end_time,
+         effective_total_seconds, status, resume_count, interrupt_duration_seconds, reward_gold, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, CURRENT_TIMESTAMP)
+       ON CONFLICT(id) DO UPDATE SET
+         task_id = excluded.task_id,
+         occurrence_date = excluded.occurrence_date,
+         record_date = excluded.record_date,
+         start_time = excluded.start_time,
+         end_time = excluded.end_time,
+         effective_total_seconds = excluded.effective_total_seconds,
+         status = excluded.status,
+         resume_count = excluded.resume_count,
+         interrupt_duration_seconds = excluded.interrupt_duration_seconds,
+         reward_gold = excluded.reward_gold`,
+      [
+        input.id,
+        input.task_id,
+        input.occurrence_date ?? null,
+        input.record_date,
+        input.start_time,
+        input.end_time ?? null,
+        input.effective_total_seconds,
+        input.status,
+        input.resume_count,
+        input.interrupt_duration_seconds ?? null,
+        input.reward_gold,
+      ]
+    );
+  },
+
+  async countOccurrencePomodoros(keys: PomodoroOccurrenceKey[]): Promise<Record<string, number>> {
+    if (!keys.length) return {};
+    const db = await getDb();
+    const places = keys
+      .map((_, i) => `(task_id = ${i * 2 + 1} AND occurrence_date = ${i * 2 + 2})`)
+      .join(' OR ');
+    const params: unknown[] = [];
+    for (const k of keys) params.push(k.taskId, k.date);
+    const rows = await db.select<
+      { task_id: string; occurrence_date: string | null; cnt: number }[]
+    >(
+      `SELECT task_id, occurrence_date, COUNT(*) AS cnt FROM pomodoro_records
+       WHERE status = 'completed' AND (${places})
+       GROUP BY task_id, occurrence_date`,
+      params
+    );
+    const result: Record<string, number> = {};
+    for (const row of rows) {
+      result[`${row.task_id}::${row.occurrence_date}`] = Number(row.cnt);
+    }
+    return result;
   },
 
   async countCompletedPomodoros(taskIds: string[]): Promise<Record<string, number>> {

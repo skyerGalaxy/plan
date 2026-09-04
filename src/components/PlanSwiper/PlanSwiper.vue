@@ -18,6 +18,7 @@
     overlapsRange,
     countRuleOccurrences,
     getRepository,
+    type PomodoroOccurrenceKey,
     type Task,
   } from '@/api';
   import { getWeekDateRange, countWorkdaysInWeek, getDayTypeInfo } from '@/utils/holiday';
@@ -39,6 +40,7 @@
    * 供日视图 TaskListItem 判断「已完成数 < 设定配额」时正确显示播放按钮。
    */
   const finishedCountMap = ref<Record<string, number>>({});
+  const occurrenceCountMap = ref<Record<string, number>>({});
   watch(
     () => [
       planStore.cycleValue,
@@ -49,16 +51,39 @@
     ],
     async () => {
       if (planStore.cycleValue !== 4) return;
-      const ids = [
-        ...planStore.quarterData,
-        ...planStore.monthData,
-        ...planStore.weekData,
-        ...planStore.dayData,
-      ]
-        .map(t => t.id)
-        .filter((v, i, a) => a.indexOf(v) === i);
-      const counts = await getRepository().countCompletedPomodoros(ids);
-      finishedCountMap.value = counts;
+      // 内联计算日视图各 slide 日期（与 slideDateArray 一致，避免后置声明 TDZ）
+      const slideCount = planStore.getSlideCount();
+      const dates = Array.from({ length: slideCount }, (_, i) =>
+        dayjs(
+          `${planStore.year}-${planStore.month}-${(planStore.weekViewIndex - 1) * 7 + i + 1}`
+        ).format('YYYY-MM-DD')
+      );
+      const nonCyclicIds: string[] = [];
+      const occKeys: { taskId: string; date: string }[] = [];
+      const seen = new Set<string>();
+      for (const date of dates) {
+        const range = dayRange(date);
+        const own = currentData.value.filter(item => overlapsRange(item, range));
+        const inherited = cyclicParentTasks(range);
+        for (const t of [...own, ...inherited]) {
+          if (t.is_cyclic === 1) {
+            const key = `${t.id}::${date}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              occKeys.push({ taskId: t.id, date });
+            }
+          } else if (!seen.has(t.id)) {
+            seen.add(t.id);
+            nonCyclicIds.push(t.id);
+          }
+        }
+      }
+      const [occ, plain] = await Promise.all([
+        getRepository().countOccurrencePomodoros(occKeys),
+        getRepository().countCompletedPomodoros(nonCyclicIds),
+      ]);
+      occurrenceCountMap.value = occ;
+      finishedCountMap.value = plain;
     },
     { immediate: true }
   );
@@ -288,11 +313,20 @@
         );
         break;
     }
-    return [...own, ...inherited].map(t => ({
-      ...t,
-      // 补充已完成番茄数：合并进来的上级循环任务无 finished_pomodoro，统一从映射补齐
-      finished_pomodoro: finishedCountMap.value[t.id] ?? (t as any).finished_pomodoro ?? 0,
-    }));
+    return [...own, ...inherited].map(t => {
+      // 循环任务实例以当前 slide 日期为 occurrence_date，完成数按实例独立计数；
+      // 非循环任务 occurrence_date 为 null，完成数仍按 taskId 聚合。
+      const occurrenceDate = t.is_cyclic === 1 ? date : null;
+      const finished =
+        t.is_cyclic === 1
+          ? occurrenceCountMap.value[`${t.id}::${date}`] ?? 0
+          : finishedCountMap.value[t.id] ?? (t as any).finished_pomodoro ?? 0;
+      return {
+        ...t,
+        occurrence_date: occurrenceDate,
+        finished_pomodoro: finished,
+      };
+    });
   });
 </script>
 

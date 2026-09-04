@@ -1,289 +1,265 @@
 <template>
-  <a-layout class="layout">
-    <a-layout-content
-      style="display: flex; justify-content: center; align-items: center; height: 100vh"
-    >
-      <div class="timer-container" style="text-align: center">
-        <!-- Timer Display with Circular Progress Bar -->
-        <div class="timer-display">
-          <p>{{ $route.params.taskName }}</p>
-          <div class="timer">
-            <svg class="progress-ring" width="200" height="200">
-              <circle
-                class="progress-ring__circle"
-                stroke="#ff6347"
-                stroke-width="8"
-                fill="transparent"
-                r="90"
-                cx="100"
-                cy="100"
-              />
-            </svg>
-            <span>{{ formattedTime }}</span>
-          </div>
-        </div>
-
-        <!-- Tomato Icons (Pomodoro)：已完成红色番茄 + 剩余浅色番茄 -->
-        <div class="rate-container" style="justify-content: center">
-          <div v-for="n in Number($route.params.totalPomodoros)" :key="n">
-            <img
-              :src="n <= completedCount ? ColorTomatoIcon : LightTomatoIcon"
-              class="tomato-icon"
-            />
-          </div>
-        </div>
-
-        <!-- Timer Control Buttons -->
-        <div class="buttons">
-          <button @click="startTimer" v-if="!isRunning && !isPaused">Start</button>
-          <button @click="pauseTimer" v-if="isRunning">Pause</button>
-          <button @click="continueTimer" v-if="!isRunning && isPaused">Continue</button>
-          <button @click="endTimer" v-if="!isRunning && isPaused">End</button>
-        </div>
+  <div class="timer-container">
+    <!-- Timer Display with Circular Progress Bar -->
+    <div class="timer-display">
+      <p class="task-title">{{ displayTitle }}</p>
+      <!-- completed 显示完成提示与金币 -->
+      <div v-if="state && state.status === 'completed'" class="completed-panel">
+        <p class="done-tip">番茄钟完成！</p>
+        <p class="reward">获得金币：{{ state.reward_gold }}</p>
       </div>
-    </a-layout-content>
-  </a-layout>
+      <!-- 中断保存 / 空闲提示 -->
+      <div v-else-if="state && state.status === 'interrupted_saved'" class="completed-panel">
+        <p class="done-tip">番茄钟已中断保存，返回任务列表可继续。</p>
+      </div>
+      <div v-else-if="!state || state.status === 'idle'" class="completed-panel">
+        <p class="done-tip">暂无进行中的番茄钟</p>
+      </div>
+
+      <div v-if="showTimer" class="timer">
+        <svg class="progress-ring" width="200" height="200">
+          <circle
+            class="progress-ring__track"
+            cx="100"
+            cy="100"
+            r="90"
+            fill="transparent"
+            stroke="#eee"
+            stroke-width="8"
+          />
+          <circle
+            class="progress-ring__circle"
+            cx="100"
+            cy="100"
+            r="90"
+            fill="transparent"
+            stroke="#ff6347"
+            stroke-width="8"
+            :stroke-dasharray="`${circumference} ${circumference}`"
+            :stroke-dashoffset="dashOffset"
+          />
+        </svg>
+        <span class="time-text">{{ formattedTime }}</span>
+      </div>
+    </div>
+
+    <!-- Control Buttons（按后端状态渲染） -->
+    <div class="buttons">
+      <template v-if="state && state.status === 'running'">
+        <button @click="onPause">暂停</button>
+        <button @click="onInterruptSave">中断保存</button>
+      </template>
+      <template v-else-if="state && state.status === 'paused'">
+        <button @click="onResume">继续运行</button>
+      </template>
+      <template v-else-if="state && state.status === 'completed'">
+        <button @click="backToList">返回任务列表</button>
+      </template>
+      <template
+        v-else-if="state && (state.status === 'interrupted_saved' || state.status === 'idle')"
+      >
+        <button @click="backToList">返回任务列表</button>
+      </template>
+    </div>
+    <p v-if="state && state.status === 'running'" class="resume-hint">
+      打断次数：{{ state.resume_count }}
+    </p>
+  </div>
 </template>
 
-<script setup>
-  import { ref, computed, onMounted } from 'vue';
-  import { useRoute } from 'vue-router';
-  import dayjs from 'dayjs';
-  import { getRepository } from '@/api';
-  import { useSettingsStore } from '@/stores/settingsStore';
+<script lang="ts" setup>
+  import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+  import { useRouter } from 'vue-router';
+  import { message } from 'ant-design-vue';
+  import {
+    getPomodoroState,
+    pausePomodoro,
+    resumePomodoro,
+    interruptSavePomodoro,
+    onPomodoroStateUpdate,
+    type PomodoroStatePayload,
+    type UnlistenFn,
+  } from '@/api/pomodoro';
 
-  import ColorTomatoIcon from '@/assets/images/red_clock.svg';
-  import LightTomatoIcon from '@/assets/images/light_tomato.svg';
+  const router = useRouter();
+  const state = ref<PomodoroStatePayload | null>(null);
+  let unlisten: UnlistenFn | null = null;
 
-  const route = useRoute();
-  const taskId = Number(route.params.id);
+  const displayTitle = computed(() => state.value?.task_title || '番茄钟');
 
-  const repo = getRepository();
-  const settings = useSettingsStore();
-  settings.load();
-
-  const minutes = ref(settings.workMinutes);
-  const seconds = ref(0);
-  const isRunning = ref(false);
-  const isPaused = ref(false);
-  const completedCount = ref(0);
-  let timerInterval = null;
-  let sessionStart = null; // 当前番茄开始时间
-  const totalTime = computed(() => settings.workMinutes * 60); // 单个番茄总时长（秒）
-
-  // 已完成番茄数（来自 pomodoro_records，按当日统计）
-  onMounted(async () => {
-    updateProgress();
-    if (!Number.isNaN(taskId)) {
-      try {
-        const counts = await repo.countCompletedPomodoros([taskId]);
-        completedCount.value = counts[taskId] ?? 0;
-      } catch (error) {
-        console.log('加载番茄记录失败:', error);
-      }
-    }
+  // 需要显示计时（running / paused）
+  const showTimer = computed(() => {
+    const s = state.value;
+    return !!s && (s.status === 'running' || s.status === 'paused');
   });
 
-  // 完成一个番茄：写入 pomodoro_records
-  async function saveCompletedRecord() {
-    if (Number.isNaN(taskId)) return;
-    const end = new Date();
-    try {
-      await repo.createPomodoroRecord({
-        task_id: taskId,
-        record_date: dayjs().format('YYYY-MM-DD'),
-        start_time: sessionStart ? sessionStart.toISOString() : end.toISOString(),
-        end_time: end.toISOString(),
-        effective_total_seconds: settings.workMinutes * 60,
-        status: 'completed',
-      });
-      completedCount.value += 1;
-    } catch (error) {
-      console.log('保存番茄记录失败:', error);
-    }
-  }
+  const circumference = 2 * Math.PI * 90;
 
-  // 中途结束：写入中断记录（满 1 分钟才记录）
-  async function saveInterruptedRecord() {
-    if (Number.isNaN(taskId) || !sessionStart) return;
-    const elapsedMinutes = Math.floor((Date.now() - sessionStart.getTime()) / 60000);
-    if (elapsedMinutes < 1) return;
-    try {
-      await repo.createPomodoroRecord({
-        task_id: taskId,
-        record_date: dayjs().format('YYYY-MM-DD'),
-        start_time: sessionStart.toISOString(),
-        end_time: new Date().toISOString(),
-        effective_total_seconds: elapsedMinutes * 60,
-        status: 'interrupted',
-      });
-    } catch (error) {
-      console.log('保存番茄记录失败:', error);
-    }
-  }
-
+  /** 剩余秒数格式化 mm:ss */
   const formattedTime = computed(() => {
-    return `${minutes.value.toString().padStart(2, '0')}:${seconds.value
+    const s = state.value;
+    const total = Math.max(0, s?.remain_seconds ?? 0);
+    const mm = Math.floor(total / 60)
       .toString()
-      .padStart(2, '0')}`;
+      .padStart(2, '0');
+    const ss = (total % 60).toString().padStart(2, '0');
+    return `${mm}:${ss}`;
   });
 
-  const timeRemaining = computed(() => {
-    return minutes.value * 60 + seconds.value;
+  /** 进度环偏移：按剩余/目标计算 */
+  const dashOffset = computed(() => {
+    const s = state.value;
+    const target = s?.target_seconds ?? 0;
+    const remain = s?.remain_seconds ?? 0;
+    const ratio = target > 0 ? remain / target : 0;
+    return circumference - ratio * circumference;
   });
 
-  const progress = computed(() => {
-    return (timeRemaining.value / totalTime) * 100;
-  });
+  function apply(payload: PomodoroStatePayload | null) {
+    if (payload) state.value = payload;
+  }
 
-  const startTimer = () => {
-    isRunning.value = true;
-    isPaused.value = false;
-    if (!sessionStart) {
-      sessionStart = new Date();
+  async function onPause() {
+    try {
+      apply(await pausePomodoro());
+    } catch (e: any) {
+      message.error(e?.message || '暂停失败');
     }
-    timerInterval = setInterval(() => {
-      if (seconds.value === 0) {
-        if (minutes.value === 0) {
-          clearInterval(timerInterval);
-          isRunning.value = false;
-          saveCompletedRecord();
-          sessionStart = null;
-          // 重置计时器，便于开始下一个番茄
-          minutes.value = settings.workMinutes;
-          seconds.value = 0;
-          updateProgress();
-          alert('Pomodoro Completed!');
-          return;
-        }
-        minutes.value--;
-        seconds.value = 59;
-      } else {
-        seconds.value--;
-      }
-      updateProgress();
-    }, 1000);
-  };
+  }
 
-  const pauseTimer = () => {
-    isRunning.value = false;
-    isPaused.value = true;
-    clearInterval(timerInterval);
-  };
+  async function onResume() {
+    try {
+      apply(await resumePomodoro());
+    } catch (e: any) {
+      message.error(e?.message || '继续运行失败');
+    }
+  }
 
-  const continueTimer = () => {
-    startTimer();
-  };
+  async function onInterruptSave() {
+    try {
+      apply(await interruptSavePomodoro());
+    } catch (e: any) {
+      message.error(e?.message || '中断保存失败');
+    } finally {
+      // 中断保存后自动退出页面，返回任务列表
+      router.push('/');
+    }
+  }
 
-  const endTimer = () => {
-    isRunning.value = false;
-    isPaused.value = false;
-    clearInterval(timerInterval);
-    saveInterruptedRecord();
-    sessionStart = null;
-    minutes.value = settings.workMinutes;
-    seconds.value = 0;
-    updateProgress();
-  };
+  function backToList() {
+    router.push('/');
+  }
 
-  const updateProgress = () => {
-    const circle = document.querySelector('.progress-ring__circle');
-    const radius = circle.r.baseVal.value;
-    const circumference = 2 * Math.PI * radius;
-    const offset = circumference - (progress.value / 100) * circumference;
-    circle.style.strokeDasharray = `${circumference} ${circumference}`;
-    circle.style.strokeDashoffset = offset;
-  };
+  onMounted(async () => {
+    unlisten = await onPomodoroStateUpdate(apply);
+    const init = await getPomodoroState();
+    apply(init);
+  });
 
-  onMounted(() => {
-    updateProgress();
+  onBeforeUnmount(() => {
+    if (unlisten) {
+      unlisten();
+      unlisten = null;
+    }
   });
 </script>
 
 <style scoped>
-  * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
-
-  body {
-    font-family: Arial, sans-serif;
-    background-color: #f0f0f0;
+  .timer-container {
     display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
     flex-direction: column;
-  }
-
-  .rate-container {
-    display: flex;
-    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 16px;
   }
 
   .timer-display {
-    margin-bottom: 30px;
-    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
   }
 
-  .timer p {
-    font-size: 18px;
+  .task-title {
+    font-size: 20px;
+    font-weight: 600;
     color: #555;
+    margin: 0;
   }
 
-  .timer span {
-    font-size: 48px;
-    font-weight: bold;
-    color: #ff6347; /* Tomato red color */
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-  }
-
-  .progress-ring {
+  .timer {
     position: relative;
     width: 200px;
     height: 200px;
   }
 
+  .progress-ring__track {
+    transition: stroke-dashoffset 0.2s;
+  }
+
   .progress-ring__circle {
-    transition: stroke-dashoffset 0.35s;
     transform: rotate(-90deg);
     transform-origin: 50% 50%;
+    transition: stroke-dashoffset 0.5s linear;
   }
 
-  .tomato-container {
-    margin-bottom: 30px;
+  .time-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 48px;
+    font-weight: bold;
+    color: #ff6347;
   }
 
-  .tomato-icon {
-    width: 22px;
-    height: 22px;
-  }
-  .buttons {
+  .completed-panel {
+    text-align: center;
+    min-height: 90px;
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
+    gap: 8px;
   }
+
+  .done-tip {
+    font-size: 22px;
+    font-weight: 600;
+    color: #389e0d;
+    margin: 0;
+  }
+
+  .reward {
+    font-size: 18px;
+    color: #d48806;
+    margin: 0;
+  }
+
+  .buttons {
+    display: flex;
+    gap: 12px;
+  }
+
   .buttons button {
     background-color: #ff6347;
-    color: white;
+    color: #fff;
     border: none;
     border-radius: 8px;
-    padding: 10px 20px;
+    padding: 10px 24px;
     font-size: 16px;
     cursor: pointer;
     transition: background-color 0.3s ease;
-    margin: 5px;
   }
 
   .buttons button:hover {
     background-color: #e55347;
   }
 
-  .buttons button:focus {
-    outline: none;
+  .resume-hint {
+    color: #999;
+    font-size: 13px;
+    margin: 0;
   }
 </style>

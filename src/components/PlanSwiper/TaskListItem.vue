@@ -11,10 +11,8 @@
   import LoopRuleModal from './LoopRuleModal.vue';
   import { ref, computed } from 'vue';
   import { getRepository, countRuleOccurrences } from '@/api';
-  import { message } from 'ant-design-vue';
-  import { useRouter } from 'vue-router';
-
-  const router = useRouter();
+  import { message, Modal } from 'ant-design-vue';
+  import { startPomodoro, interruptSavePomodoro, getPomodoroState } from '@/api/pomodoro';
 
   const props = defineProps({
     item: {
@@ -38,6 +36,27 @@
 
   // 已完成数未达设定配额时才可进入番茄钟开始专注
   const canStartPomodoro = computed(() => finishedPomodoro.value < pomodoroTarget.value);
+
+  // 开始番茄钟：调用后端命令；若已有其它任务进行中则弹窗确认切换
+  const handleStartPomodoro = async () => {
+    try {
+      await startPomodoro(props.item.id, props.item.occurrence_date ?? null);
+    } catch (error: any) {
+      // 后端返回单例冲突（已有其它任务 running/paused）
+      const current = await getPomodoroState();
+      const currentTitle = current?.task_title || '另一个任务';
+      Modal.confirm({
+        title: '已有进行中的番茄钟',
+        content: `当前「${currentTitle}」正在专注中。结束它并切换到「${props.item.title}」吗？`,
+        okText: '切换',
+        cancelText: '取消',
+        async onOk() {
+          await interruptSavePomodoro().catch(() => {});
+          await startPomodoro(props.item.id, props.item.occurrence_date ?? null);
+        },
+      });
+    }
+  };
 
   const handleOpenModal = () => {
     // 循环任务只能删除，禁止打开编辑弹窗
@@ -159,14 +178,7 @@
             </div>
           </template>
           <template #avatar>
-            <a-avatar
-              v-if="canStartPomodoro"
-              @click.stop="
-                router.push(
-                  `/pomodoro/${props.item.id}/${encodeURIComponent(props.item.title)}/${props.item.total_pomodoro_quota}`
-                )
-              "
-            >
+            <a-avatar v-if="canStartPomodoro" @click.stop="handleStartPomodoro">
               <PlayCircleTwoTone twoToneColor="#52c41a" style="font-size: 20px" />
             </a-avatar>
           </template>
