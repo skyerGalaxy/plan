@@ -14,7 +14,7 @@ export interface PomodoroStatePayload {
   /** 循环任务具体实例日期（YYYY-MM-DD）；非循环/空闲为 null */
   occurrence_date: string | null;
   task_title: string;
-  status: 'running' | 'paused' | 'interrupted_saved' | 'completed' | 'abandoned' | 'idle';
+  status: 'running' | 'paused' | 'interrupted_saved' | 'completed' | 'idle';
   remain_seconds: number;
   resume_count: number;
   target_seconds: number;

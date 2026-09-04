@@ -7,7 +7,8 @@ pub enum PomodoroStatus {
     Paused,
     InterruptedSaved,
     Completed,
-    Abandoned,
+    /// 无会话占位（payload 在 task_id 为空时统一呈现为 "idle"）
+    Idle,
 }
 
 impl PomodoroStatus {
@@ -17,18 +18,20 @@ impl PomodoroStatus {
             Self::Paused => "paused",
             Self::InterruptedSaved => "interrupted_saved",
             Self::Completed => "completed",
-            Self::Abandoned => "abandoned",
+            Self::Idle => "idle",
         }
     }
 
-    /// 从数据库状态文本恢复；容错遗留前端写入的 "interrupted"
+    /// 从数据库状态文本恢复。
+    /// load_active_record 只查询 running/paused/interrupted_saved，
+    /// 其余未知值兜底为 Idle（不会作为活动会话恢复）。
     pub fn from_db(s: &str) -> Self {
         match s {
             "running" => Self::Running,
             "paused" => Self::Paused,
-            "interrupted_saved" | "interrupted" => Self::InterruptedSaved,
+            "interrupted_saved" => Self::InterruptedSaved,
             "completed" => Self::Completed,
-            _ => Self::Abandoned,
+            _ => Self::Idle,
         }
     }
 }
@@ -41,7 +44,7 @@ pub struct PomodoroStatePayload {
     /// 循环任务具体实例日期（YYYY-MM-DD）；非循环/空闲为 None
     pub occurrence_date: Option<String>,
     pub task_title: String,
-    /// running | paused | interrupted_saved | completed | abandoned | idle
+    /// running | paused | interrupted_saved | completed | idle
     pub status: String,
     pub remain_seconds: u32,
     pub resume_count: u32,
@@ -70,7 +73,7 @@ pub struct PomodoroRecordSync {
     pub start_time: String,
     pub end_time: Option<String>,
     pub effective_total_seconds: u32,
-    /// running | paused | interrupted_saved | completed | abandoned | interrupted(遗留)
+    /// running | paused | interrupted_saved | completed
     pub status: String,
     pub resume_count: u32,
     pub interrupt_duration_seconds: Option<u32>,

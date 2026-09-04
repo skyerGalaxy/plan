@@ -48,7 +48,7 @@ export interface PomodoroRecord {
   start_time: string; // ISO DATETIME
   end_time: string | null;
   effective_total_seconds: number; // 有效专注总时长（秒）
-  status: 'completed' | 'interrupted';
+  status: 'completed' | 'interrupted_saved';
   resume_count: number; // 续番茄次数
   interrupt_duration_seconds: number | null; // 中断时长（秒）
   reward_gold: number; // 奖励金币
@@ -73,7 +73,7 @@ export interface PomodoroRecordSync {
   start_time: string; // ISO DATETIME
   end_time: string | null;
   effective_total_seconds: number; // 有效专注总时长（秒）
-  status: 'running' | 'paused' | 'interrupted_saved' | 'completed' | 'abandoned' | 'interrupted';
+  status: 'running' | 'paused' | 'interrupted_saved' | 'completed';
   resume_count: number;
   interrupt_duration_seconds: number | null;
   reward_gold: number;

@@ -164,7 +164,7 @@ impl Db {
             .prepare(
                 "SELECT id, task_id, task_title, occurrence_date, effective_total_seconds, resume_count, reward_gold, status, target_seconds
                  FROM pomodoro_records
-                 WHERE status IN ('interrupted_saved','interrupted') AND task_id = ?1
+                 WHERE status = 'interrupted_saved' AND task_id = ?1
                    AND (occurrence_date = ?2 OR (?2 IS NULL AND occurrence_date IS NULL))
                  ORDER BY created_at DESC LIMIT 1",
             )

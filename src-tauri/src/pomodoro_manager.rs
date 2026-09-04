@@ -34,7 +34,7 @@ struct Inner {
 impl Inner {
     fn idle() -> Self {
         Self {
-            status: PomodoroStatus::Abandoned,
+            status: PomodoroStatus::Idle,
             record_id: None,
             task_id: None,
             occurrence_date: None,
@@ -393,8 +393,9 @@ fn tick_once(inner: &Arc<Mutex<Inner>>, db: &Db, app: &AppHandle) -> bool {
 /// 桌宠：running/paused 且专注模式开启 → 显示，否则隐藏。
 /// 主窗口：
 /// - 专注模式开启且开始番茄（running）→ 隐藏主窗口，由桌宠接管；
-/// - 暂停 / 中断保存（paused / interrupted_saved）→ 不强制操作（不自动隐藏，也不强制唤起）；
-/// - 完成 / 放弃 / 空闲，或关闭专注模式 → 唤起主窗口，回到任务列表。
+/// - 暂停（paused）→ 不强制操作（桌宠仍在，用户可继续）；
+/// - 中断保存（interrupted_saved）→ 唤起主窗口（桌宠已收起，须由主窗口接管，否则两窗皆隐）；
+/// - 完成 / 空闲，或关闭专注模式 → 唤起主窗口，回到任务列表。
 /// 是否「最小化到托盘」由用户点击窗口关闭按钮时按 close_to_tray 设置决定。
 fn sync_windows(app: &AppHandle, db: &Db, status: &str) {
     let focus = db.focus_mode();
@@ -410,7 +411,7 @@ fn sync_windows(app: &AppHandle, db: &Db, status: &str) {
         if let Some(w) = app.get_webview_window("main") {
             let _ = w.hide();
         }
-    } else if !focus || matches!(status, "completed" | "abandoned" | "idle") {
+    } else if !focus || matches!(status, "completed" | "interrupted_saved" | "idle") {
         crate::reveal_main_window(app);
     }
 }
